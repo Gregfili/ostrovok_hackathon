@@ -14,11 +14,13 @@ if str(BACKEND) not in sys.path:
 
 from hotel_faq.service import (  # noqa: E402
     answer_question,
+    delete_document,
     get_config,
     init_faq_db,
     ping,
     save_config,
     upload_document,
+    vector_retrieve,
 )
 
 app = FastAPI(title="Hotel FAQ Agent")
@@ -58,6 +60,14 @@ async def upload(hotel_id: str, file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@app.delete("/hotels/{hotel_id}/documents/{document_id}")
+def remove_document(hotel_id: str, document_id: int) -> dict:
+    try:
+        return delete_document(hotel_id, document_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
 class AskBody(BaseModel):
     question: str = Field(min_length=1)
 
@@ -65,3 +75,13 @@ class AskBody(BaseModel):
 @app.post("/hotels/{hotel_id}/ask")
 def ask(hotel_id: str, body: AskBody) -> dict:
     return answer_question(hotel_id, body.question)
+
+
+class VectorBody(BaseModel):
+    question: str = Field(min_length=1)
+    top_k: int = Field(default=4, ge=1, le=10)
+
+
+@app.post("/hotels/{hotel_id}/vector-retrieve")
+def vector_route(hotel_id: str, body: VectorBody) -> dict:
+    return vector_retrieve(hotel_id, body.question, top_k=body.top_k)

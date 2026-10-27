@@ -37,11 +37,13 @@ from gateway.quality import quality_report  # noqa: E402
 from geo.service import get_hotel, ping as geo_ping  # noqa: E402
 from hotel_faq.service import (  # noqa: E402
     answer_question as faq_answer,
+    delete_document as faq_delete_document,
     get_config as faq_get_config,
     init_faq_db,
     ping as faq_ping,
     save_config as faq_save_config,
     upload_document as faq_upload,
+    vector_retrieve as faq_vector_retrieve,
 )
 from hotelier.service import ping as hotelier_ping, submit  # noqa: E402
 from mobility.service import ping as mobility_ping, walk_to  # noqa: E402
@@ -128,6 +130,11 @@ class FaqConfigRequest(BaseModel):
 
 class FaqAskRequest(BaseModel):
     question: str = Field(min_length=1)
+
+
+class FaqVectorRequest(BaseModel):
+    question: str = Field(min_length=1)
+    top_k: int = Field(default=4, ge=1, le=10)
 
 
 @app.get("/health")
@@ -240,9 +247,22 @@ async def faq_upload_route(hotel_id: str, file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@app.delete("/api/faq/hotels/{hotel_id}/documents/{document_id}")
+def faq_delete_document_route(hotel_id: str, document_id: int) -> dict:
+    try:
+        return faq_delete_document(hotel_id, document_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
 @app.post("/api/faq/hotels/{hotel_id}/ask")
 def faq_ask_route(hotel_id: str, body: FaqAskRequest) -> dict:
     return faq_answer(hotel_id, body.question)
+
+
+@app.post("/api/faq/hotels/{hotel_id}/vector-retrieve")
+def faq_vector_retrieve_route(hotel_id: str, body: FaqVectorRequest) -> dict:
+    return faq_vector_retrieve(hotel_id, body.question, top_k=body.top_k)
 
 
 def _page(path: str) -> FileResponse:
@@ -263,10 +283,10 @@ def _page(path: str) -> FileResponse:
 MEDIA = BACKEND.parent / "media" / "pictures"
 
 
-@app.get("/media/pictures/{file_name}")
-def picture(file_name: str) -> FileResponse:
+@app.get("/media/pictures/{file_path:path}")
+def picture(file_path: str) -> FileResponse:
     root = MEDIA.resolve()
-    candidate = (MEDIA / file_name).resolve()
+    candidate = (MEDIA / file_path).resolve()
     if candidate != root and root not in candidate.parents:
         raise HTTPException(status_code=404, detail="Нет такого файла")
     if not candidate.is_file():

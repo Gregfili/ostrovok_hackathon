@@ -1,5 +1,4 @@
 @import "tailwindcss";
-
 @theme {
   --font-sans: "Segoe UI", system-ui, sans-serif;
   --font-serif: Palatino, "Palatino Linotype", Georgia, serif;

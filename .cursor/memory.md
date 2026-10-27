@@ -12,13 +12,13 @@
 
 ## Что верно сейчас (продукт/UI)
 
-Публичный адрес: http://127.0.0.1:8080. Главная — диалог «Создай свой остров», выдача, регистрация. После оплаты в кабинете — **Чат с отельером** (RAG → живой отельер), post-booking на главной через `post-booking-ask`. Локальный git: ветка `master`, 3 коммита (последний `f3bdcb8`, 2026-10-27), **remote не настроен** — push только по указанию Greg.
+Публичный адрес: http://127.0.0.1:8080. Главная — карусель, слоган и чат по центру секции (как форма ввода); боковые стрелки + панель регионов слева / выдача справа; `HotelCarousel.jsx`. После оплаты в кабинете — **Чат с отельером** (RAG → живой отельер), post-booking на главной через `post-booking-ask`. Локальный git: ветка `master`, 4 коммита (последний `8aec2e7`, 2026-10-27), **remote не настроен** — push только по указанию Greg.
 
 ## Решение Greg (2026-10-27)
 
 Текущий прототип кажется **слишком простым** для жюри; акцент организаторов — **геоданные для гостя**, не «ещё один чат». Рассматриваем обогащение: **data.mos.ru** (приоритет), investmoscow.ru (контекст), um.mos.ru (культура/якоря).
 
-**FAQ-агент отельера:** микросервис `backend/hotel_faq/` (TF-IDF RAG, SQLite chunks, upload UTF-8). API: `/api/faq/hotels/{id}`, PUT config, POST upload, POST ask. Гость `/api/admin/ask` → автоответ `faq_agent` или эскалация. Пекин в сиде: FAQ включён. Отдельно: `uvicorn hotel_faq.main:app --port 8092`. UI: вкладка FAQ — шаблон, upload, тест RAG.
+**FAQ-агент отельера:** TF-IDF для шаблонных `section:*`; fallback **vector RAG** (MiniLM + FAISS, upload-чанки). Гость `/api/faq/hotels/pekin/ask`: `method` = `rag_tfidf` | `rag_vector`. Демо: `python -m hotel_faq.demo_rag_pekin --ask "…"`. Uvicorn: `backend`, порт 8080.
 
 ## Дальше
 

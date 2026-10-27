@@ -8,9 +8,11 @@ import re
 from datetime import datetime, timezone
 
 from common.db import connect, init_db
-from hotel_faq.rag import TfidfIndex, split_chunks
+from hotel_faq.chunking import split_chunks_overlap
+from hotel_faq.rag import Chunk, TfidfIndex, split_chunks
 
 MIN_SCORE = 0.28
+VECTOR_MIN_SCORE = 0.45
 SECTION_LABELS = {
     "checkin": "Заезд / выезд",
     "breakfast": "Завтрак",
@@ -162,7 +164,7 @@ def _chunk_upload(conn, hotel_id: str, doc_id: int, filename: str, body: str) ->
         (hotel_id, f"{prefix}%"),
     )
     source = f"upload:{doc_id}:{filename}"
-    chunks, _ = split_chunks(body, source, 1)
+    chunks, _ = split_chunks_overlap(body, source, 1)
     for chunk in chunks:
         conn.execute(
             "INSERT INTO hotel_faq_chunks (hotel_id, source, text) VALUES (?, ?, ?)",
@@ -170,19 +172,43 @@ def _chunk_upload(conn, hotel_id: str, doc_id: int, filename: str, body: str) ->
         )
 
 
-def _reindex(hotel_id: str) -> None:
+def _chunks_for_hotel(hotel_id: str) -> list[Chunk]:
     init_faq_db()
     with connect() as conn:
         rows = conn.execute(
             "SELECT id, source, text FROM hotel_faq_chunks WHERE hotel_id = ? ORDER BY id",
             (hotel_id,),
         ).fetchall()
-    from hotel_faq.rag import Chunk
+    return [Chunk(chunk_id=row["id"], source=row["source"], text=row["text"]) for row in rows]
 
-    chunks = [Chunk(chunk_id=row["id"], source=row["source"], text=row["text"]) for row in rows]
+
+def _reindex(hotel_id: str) -> None:
+    chunks = _chunks_for_hotel(hotel_id)
     index = TfidfIndex()
     index.build(chunks)
     _INDEX[hotel_id] = index
+    try:
+        from hotel_faq.vector_store import rebuild_vector_index
+
+        upload_chunks = [chunk for chunk in chunks if chunk.source.startswith("upload:")]
+        rebuild_vector_index(hotel_id, upload_chunks or chunks)
+    except ImportError:
+        pass
+
+
+def vector_retrieve(hotel_id: str, question: str, *, top_k: int = 4) -> dict:
+    from hotel_faq.vector_store import vector_search
+
+    if hotel_id not in _INDEX:
+        _reindex(hotel_id)
+    try:
+        return vector_search(hotel_id, question, top_k=top_k)
+    except FileNotFoundError:
+        chunks = _chunks_for_hotel(hotel_id)
+        from hotel_faq.vector_store import rebuild_vector_index, vector_search
+
+        rebuild_vector_index(hotel_id, chunks)
+        return vector_search(hotel_id, question, top_k=top_k)
 
 
 def _config_row(conn, hotel_id: str):
@@ -296,6 +322,35 @@ def upload_document(hotel_id: str, filename: str, raw: bytes) -> dict:
     return get_config(hotel_id)
 
 
+def delete_document(hotel_id: str, document_id: int) -> dict:
+    init_faq_db()
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id FROM hotel_faq_documents
+            WHERE hotel_id = ? AND id = ?
+            """,
+            (hotel_id, document_id),
+        ).fetchone()
+        if not row:
+            raise ValueError("Документ не найден")
+        prefix = f"upload:{document_id}:"
+        conn.execute(
+            "DELETE FROM hotel_faq_chunks WHERE hotel_id = ? AND source LIKE ?",
+            (hotel_id, f"{prefix}%"),
+        )
+        conn.execute(
+            "DELETE FROM hotel_faq_documents WHERE hotel_id = ? AND id = ?",
+            (hotel_id, document_id),
+        )
+        conn.execute(
+            "UPDATE hotel_faq_config SET updated_at = ? WHERE hotel_id = ?",
+            (_now(), hotel_id),
+        )
+    _reindex(hotel_id)
+    return get_config(hotel_id)
+
+
 def _maybe_llm_polish(question: str, draft: str) -> str:
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not key:
@@ -331,6 +386,55 @@ def _maybe_llm_polish(question: str, draft: str) -> str:
         return data["choices"][0]["message"]["content"].strip() or draft
     except Exception:
         return draft
+
+
+def _answer_from_vector(hotel_id: str, text: str) -> dict | None:
+    from common.post_booking_routing import rag_hit_relevant
+    from hotel_faq.retrieval import compose_guest_answer, is_offers_query, keyword_overlap
+
+    try:
+        from hotel_faq.vector_store import vector_search
+
+        payload = vector_search(hotel_id, text, top_k=8 if is_offers_query(text) else 5)
+    except (ImportError, FileNotFoundError, OSError):
+        return None
+    hits = payload.get("hits") or []
+    if not hits:
+        return None
+    if is_offers_query(text):
+        from hotel_faq.retrieval import _is_offers_chunk, rerank_hits
+
+        extra = [
+            {"text": c.text, "score": 0.55, "source": c.source}
+            for c in _chunks_for_hotel(hotel_id)
+            if _is_offers_chunk(c.text)
+        ]
+        seen = {str(h.get("text", ""))[:80] for h in hits}
+        for row in extra:
+            if row["text"][:80] not in seen:
+                hits.append(row)
+                seen.add(row["text"][:80])
+        hits = rerank_hits(text, hits)[:10]
+    upload = [hit for hit in hits if str(hit.get("source", "")).startswith("upload:")]
+    best = upload[0] if upload else hits[0]
+    score = float(best.get("rerank_score", best.get("score", 0)))
+    chunk = str(best.get("text", ""))
+    if not chunk:
+        return None
+    kw = keyword_overlap(text, chunk)
+    if score < 0.38 and kw < 0.25:
+        return None
+    if not rag_hit_relevant(text, chunk, max(float(best.get("score", 0)), 0.35)):
+        if kw < 0.34:
+            return None
+    draft = compose_guest_answer(text, hits)
+    sources = list(dict.fromkeys(str(h.get("source", "")) for h in hits[:3] if h.get("source")))
+    return {
+        "draft": draft,
+        "sources": sources or [str(best.get("source", ""))],
+        "scores": [round(score, 3)],
+        "method": "rag_vector",
+    }
 
 
 def answer_question(hotel_id: str, question: str) -> dict:
@@ -372,25 +476,46 @@ def answer_question(hotel_id: str, question: str) -> dict:
 
     hits = index.search(text, top_k=3)
     draft, sources = compose_answer(hits, MIN_SCORE, guest_facing=True)
-    if not draft or not hits:
+    if not draft and hits and rag_hit_relevant(text, hits[0].chunk.text, hits[0].score):
+        draft = hits[0].chunk.text
+        sources = [hits[0].chunk.source]
+    tfidf_ok = bool(draft) and hits and rag_hit_relevant(text, hits[0].chunk.text, hits[0].score)
+    section_tfidf = tfidf_ok and str(hits[0].chunk.source).startswith("section:")
+
+    if section_tfidf:
+        answer = _maybe_llm_polish(text, draft)
         return {
-            "mode": "escalate",
-            "reason": "no_match",
-            "message": "В базе знаний нет ответа. Передаю отельеру.",
-            "scores": [round(hit.score, 3) for hit in hits],
+            "mode": "answer",
+            "message": answer,
+            "sources": sources,
+            "scores": [round(hit.score, 3) for hit in hits[:2]],
+            "method": "rag_tfidf",
         }
-    if not rag_hit_relevant(text, hits[0].chunk.text, hits[0].score):
+
+    vector = _answer_from_vector(hotel_id, text)
+    if vector:
+        answer = _maybe_llm_polish(text, vector["draft"])
         return {
-            "mode": "escalate",
-            "reason": "weak_match",
-            "message": "В базе знаний нет точного ответа. Передаю отельеру.",
-            "scores": [round(hit.score, 3) for hit in hits],
+            "mode": "answer",
+            "message": answer,
+            "sources": vector["sources"],
+            "scores": vector["scores"],
+            "method": vector["method"],
         }
-    answer = _maybe_llm_polish(text, draft)
+
+    if tfidf_ok:
+        answer = _maybe_llm_polish(text, draft)
+        return {
+            "mode": "answer",
+            "message": answer,
+            "sources": sources,
+            "scores": [round(hit.score, 3) for hit in hits[:2]],
+            "method": "rag_tfidf",
+        }
+
     return {
-        "mode": "answer",
-        "message": answer,
-        "sources": sources,
-        "scores": [round(hit.score, 3) for hit in hits[:2]],
-        "method": "rag_tfidf",
+        "mode": "escalate",
+        "reason": "no_match" if not draft else "weak_match",
+        "message": "В базе знаний нет ответа. Передаю отельеру.",
+        "scores": [round(hit.score, 3) for hit in hits],
     }

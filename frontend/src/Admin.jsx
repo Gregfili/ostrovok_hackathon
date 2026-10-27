@@ -334,8 +334,32 @@ function Admin({
     }
   }
 
+  async function removeKbDocument(documentId, filename) {
+    if (!account?.hotel_id || !documentId) return
+    setBusy(true)
+    setFaqNotice('')
+    setError('')
+    try {
+      const body = await read(`/api/faq/hotels/${account.hotel_id}/documents/${documentId}`, {
+        method: 'DELETE',
+      })
+      applyFaqState(body, {
+        setFaqEnabled,
+        setFaqSections,
+        setFaqDocuments,
+        setFaqChunkCount,
+        setFaqSavedAt,
+      })
+      setFaqNotice(`«${filename}» удалён из базы знаний.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function testFaqAgent(event) {
-    event.preventDefault()
+    event?.preventDefault?.()
     if (!account?.hotel_id || !faqTestQuestion.trim()) return
     setBusy(true)
     setFaqTestResult(null)
@@ -655,48 +679,77 @@ function Admin({
                   <div className="rounded-2xl border border-line bg-panel p-4">
                     <p className="font-medium text-sm">Загрузка базы знаний</p>
                     <p className="mt-1 text-xs text-mute">UTF-8: .txt, .md, .json — попадают в RAG вместе с блоками шаблона.</p>
-                    <input
-                      type="file"
-                      accept=".txt,.md,.json,text/plain,text/markdown,application/json"
-                      disabled={busy}
-                      onChange={uploadKbFile}
-                      className="mt-3 block w-full text-sm"
-                    />
+                    <label
+                      className={`mt-3 inline-flex cursor-pointer items-center justify-center rounded-xl border border-pine bg-paper px-4 py-2.5 text-sm font-medium text-pine transition-colors hover:bg-moss/10 focus-within:ring-2 focus-within:ring-pine/30 ${busy ? 'pointer-events-none opacity-40' : ''}`}
+                    >
+                      <input
+                        type="file"
+                        accept=".txt,.md,.json,text/plain,text/markdown,application/json"
+                        disabled={busy}
+                        onChange={uploadKbFile}
+                        className="sr-only"
+                      />
+                      Выберите файл
+                    </label>
                     {faqDocuments.length > 0 && (
                       <ul className="mt-3 flex flex-col gap-1 text-xs text-mute">
                         {faqDocuments.map((doc) => (
-                          <li key={doc.id}>
-                            {doc.filename} · {doc.chars} симв. · {new Date(doc.uploaded_at).toLocaleString('ru-RU')}
+                          <li key={doc.id} className="flex items-start justify-between gap-2 rounded-lg bg-paper/80 px-2 py-1">
+                            <span className="min-w-0 flex-1">
+                              {doc.filename} · {doc.chars} симв. · {new Date(doc.uploaded_at).toLocaleString('ru-RU')}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-label={`Удалить ${doc.filename}`}
+                              title="Удалить файл из базы знаний"
+                              onClick={() => removeKbDocument(doc.id, doc.filename)}
+                              className="shrink-0 rounded-md px-1.5 py-0.5 text-base leading-none text-clay hover:bg-clay/10 disabled:opacity-40"
+                            >
+                              ×
+                            </button>
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
 
-                  <form onSubmit={testFaqAgent} className="rounded-2xl border border-line bg-panel p-4">
+                  <div className="rounded-2xl border border-line bg-panel p-4">
                     <p className="font-medium text-sm">Проверка ответа (без гостя)</p>
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                       <input
                         value={faqTestQuestion}
                         onChange={(event) => setFaqTestQuestion(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            testFaqAgent(event)
+                          }
+                        }}
                         placeholder="Например: во сколько завтрак?"
                         className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-pine"
                       />
                       <button
-                        type="submit"
+                        type="button"
                         disabled={busy || !faqTestQuestion.trim()}
+                        onClick={testFaqAgent}
                         className="rounded-xl border border-pine px-3 py-2 text-sm text-pine disabled:opacity-40"
                       >
                         Спросить RAG
                       </button>
                     </div>
                     {faqTestResult && (
-                      <p className="mt-3 text-sm">
-                        <span className="text-mute">{faqTestResult.mode}: </span>
-                        {faqTestResult.message}
-                      </p>
+                      <div className="mt-3 space-y-1 text-sm">
+                        <p className="text-xs text-mute">
+                          {faqTestResult.mode}
+                          {faqTestResult.method ? ` · ${faqTestResult.method}` : ''}
+                          {faqTestResult.scores?.length ? ` · score ${faqTestResult.scores[0]}` : ''}
+                          {faqTestResult.sources?.length ? ` · ${faqTestResult.sources[0]}` : ''}
+                        </p>
+                        <p className="whitespace-pre-line">{faqTestResult.message}</p>
+                      </div>
                     )}
-                  </form>
+                  </div>
 
                   <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-4 text-sm text-mute">
                     <p className="font-medium text-ink">Как видит гость</p>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import Admin from './Admin.jsx'
-
+import HotelCarousel, { CAROUSEL_REGIONS, CarouselShiftIndicator } from './HotelCarousel.jsx'
 const GREETING =
-  'Напишите, что вам важно. Ответ останется в этом диалоге. Подробности откроются справа по кнопке «Выдача».'
+  'Планируете поездку? Опишите, какая она должна быть, и мы подберём вам подходящие варианты.'
 
 const QUERY_SAMPLE =
   'Например: мне нужен тихий отель, люблю походить по булгаковским местам, а также шопинг, и вечером развлечься в ночном клубе.'
@@ -263,6 +263,76 @@ function App() {
   const [intakeHint, setIntakeHint] = useState('')
   const [hotelierChatSeed, setHotelierChatSeed] = useState('')
   const [pendingHotelierChat, setPendingHotelierChat] = useState('')
+  const [carouselShift, setCarouselShift] = useState('right')
+  const [carouselDock, setCarouselDock] = useState('center')
+  const [leftSheet, setLeftSheet] = useState('closed')
+  const [leftPane, setLeftPane] = useState(416)
+  const [carouselRegion, setCarouselRegion] = useState('Москва')
+
+  function dragLeftPane(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    const handle = event.currentTarget
+    if (handle.setPointerCapture) handle.setPointerCapture(event.pointerId)
+    const startX = event.clientX
+    const start = leftPane
+    const move = (ev) => {
+      const next = start + (ev.clientX - startX)
+      const max = Math.max(280, Math.min(window.innerWidth - 280, window.innerWidth * 0.72))
+      setLeftPane(Math.round(Math.min(Math.max(next, 280), max)))
+    }
+    const up = (ev) => {
+      if (handle.releasePointerCapture && ev.pointerId === event.pointerId) {
+        handle.releasePointerCapture(event.pointerId)
+      }
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+
+  function onLeftArrowClick() {
+    if (leftSheet === 'side') {
+      setLeftSheet('closed')
+      return
+    }
+    setSheet('closed')
+    setLeftSheet('side')
+  }
+
+  function onRightArrowClick() {
+    if (leftSheet === 'side') {
+      setLeftSheet('closed')
+      return
+    }
+    if (sheet !== 'closed') {
+      setSheet('closed')
+      return
+    }
+    setLeftSheet('closed')
+    setSheet('side')
+  }
+
+  const leftPanelOpen = leftSheet === 'side'
+  const rightPanelOpen = sheet === 'side' || sheet === 'full'
+  const leftArrowDirection = rightPanelOpen ? 'left' : leftPanelOpen ? 'left' : carouselShift
+  const rightArrowDirection = leftPanelOpen ? 'right' : rightPanelOpen ? 'right' : carouselShift
+  const leftArrowInset = leftPanelOpen ? leftPane : 0
+  const rightArrowInset = sheet === 'side' ? pane : 0
+
+  useEffect(() => {
+    if (sheet === 'side' || sheet === 'full') {
+      setLeftSheet('closed')
+      setCarouselDock('right')
+    } else if (leftSheet === 'side') {
+      setCarouselDock('left')
+    } else {
+      setCarouselDock('center')
+    }
+  }, [sheet, leftSheet])
 
   function dragPane(event) {
     event.preventDefault()
@@ -517,6 +587,7 @@ function App() {
             onClick={(event) => {
               event.stopPropagation()
               setSheet('closed')
+              if (leftSheet !== 'side') setCarouselDock('center')
             }}
             className="rounded-xl border border-line px-3 py-2 text-sm"
           >
@@ -589,12 +660,27 @@ function App() {
         </svg>
         <span className="text-xs">{guestName || 'Регистрация'}</span>
       </button>
-      <div style={sheet === 'side' ? { paddingRight: pane } : undefined}>
+      <div
+        style={{
+          paddingRight: sheet === 'side' ? pane : undefined,
+          paddingLeft: leftSheet === 'side' ? leftPane : undefined,
+        }}
+      >
         <section className="mx-auto flex min-h-svh w-full max-w-3xl flex-col px-5">
-          <h1 className="w-full max-w-[36rem] self-start pt-20 text-center font-serif text-4xl leading-tight text-pine sm:pt-16 sm:text-5xl">
-            Создай свой остров
-          </h1>
-          <div className="flex flex-1 flex-col gap-3 overflow-y-auto pb-4">
+          <div className="relative w-full overflow-visible pt-4 sm:pt-6">
+            <HotelCarousel dock={carouselDock} onShiftDirection={setCarouselShift} />
+          </div>
+          <header className="mx-auto w-full max-w-[36rem] pt-6 text-center sm:pt-8">
+            <h1 className="w-full font-serif text-4xl leading-tight text-pine sm:text-5xl">Создай свой островок</h1>
+            {guestName ? (
+              <p className="mt-2 text-sm text-mute">
+                Здравствуйте, <span className="font-medium text-ink">{guestName}</span>
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-mute">Подберём отель под ваш запрос</p>
+            )}
+          </header>
+          <div className="mx-auto flex w-full max-w-[36rem] flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4">
             {messages.map((message, index) => (
               <p
                 key={`${message.role}-${index}`}
@@ -667,16 +753,69 @@ function App() {
           )}
         </section>
       </div>
-      {sheet === 'closed' && (
-        <button
-          type="button"
-          onClick={() => setSheet('side')}
-          className="fixed top-1/2 right-0 z-30 -translate-y-1/2 rounded-l-2xl bg-pine px-3 py-4 text-sm text-panel"
-        >
-          Выдача
-          {intakeWaiting ? ' · ждём ответ' : hotels.length ? ` · ${hotels.length}` : cardSheet ? ' · карта' : ''}
-        </button>
-      )}
+      <CarouselShiftIndicator
+        direction={leftArrowDirection}
+        edge="left"
+        inset={leftArrowInset}
+        onClick={onLeftArrowClick}
+        titleExtra={leftPanelOpen ? 'Закрыть выбор региона' : 'Открыть выбор региона'}
+      />
+      <CarouselShiftIndicator
+        direction={rightArrowDirection}
+        edge="right"
+        inset={rightArrowInset}
+        onClick={onRightArrowClick}
+        titleExtra={
+          leftPanelOpen
+            ? 'Вернуть карусель'
+            : sheet !== 'closed'
+              ? 'Закрыть выдачу'
+              : `Открыть выдачу${
+                  intakeWaiting ? ' · ждём ответ' : hotels.length ? ` · ${hotels.length} отелей` : cardSheet ? ' · карта' : ''
+                }`
+        }
+      />
+      <aside
+        style={leftSheet === 'side' ? { width: leftPane } : undefined}
+        className={`fixed top-0 left-0 z-30 flex h-svh border-r border-line bg-paper shadow-xl transition-transform duration-300 ${
+          leftSheet === 'closed' ? 'pointer-events-none -translate-x-full' : 'translate-x-0 flex-row'
+        }`}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <h2 className="font-serif text-xl text-pine">Регион</h2>
+          <p className="mt-1 text-sm text-mute">Выберите регион для подбора отелей</p>
+          <ul className="mt-4 space-y-1">
+            {CAROUSEL_REGIONS.map((name) => (
+              <li key={name}>
+                <button
+                  type="button"
+                  onClick={() => setCarouselRegion(name)}
+                  className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
+                    carouselRegion === name
+                      ? 'bg-pine text-panel'
+                      : 'text-ink hover:bg-moss/10'
+                  }`}
+                >
+                  {name}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-sm text-mute">
+            Сейчас: <span className="font-medium text-ink">{carouselRegion}</span>
+          </p>
+        </div>
+        {leftSheet === 'side' && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Ширина панели региона"
+            title="Потяните, чтобы изменить ширину"
+            onPointerDown={dragLeftPane}
+            className="relative z-20 w-3 shrink-0 cursor-col-resize touch-none select-none border-l border-moss/25 bg-moss/5 hover:bg-moss/15 active:bg-moss/25"
+          />
+        )}
+      </aside>
       <aside
         style={sheet === 'full' ? undefined : sheet === 'side' ? { width: pane } : undefined}
         className={`fixed top-0 right-0 z-30 flex h-svh border-l border-line bg-paper shadow-xl transition-transform duration-300 ${

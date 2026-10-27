@@ -120,12 +120,12 @@ def is_hotel_kb_question(text: str) -> bool:
 
 
 def rag_hit_relevant(query: str, chunk_text: str, score: float) -> bool:
-    if score < 0.28:
-        return False
     q = {t for t in tokenize(query) if t not in _RAG_STOP and len(t) > 2}
     c = set(tokenize(chunk_text))
-    if q & c:
+    if q & c and score >= 0.08:
         return True
+    if score < 0.28:
+        return False
     if score >= 0.42 and is_hotel_kb_question(query):
         return True
     return False
