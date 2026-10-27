@@ -24,21 +24,19 @@ KB_PATH = ROOT / "doc" / KB_FILENAME
 
 
 def rechunk_upload_documents(hotel_id: str) -> int:
-    from common.db import connect
+    from sqlalchemy import select
+
+    from common.database import session_scope
+    from common.tables import HotelFaqDocument
     from hotel_faq.service import _chunk_upload, _reindex, init_faq_db
 
     init_faq_db()
-    with connect() as conn:
-        docs = conn.execute(
-            """
-            SELECT id, filename, body FROM hotel_faq_documents
-            WHERE hotel_id = ? ORDER BY id
-            """,
-            (hotel_id,),
-        ).fetchall()
+    with session_scope() as session:
+        docs = session.scalars(
+            select(HotelFaqDocument).where(HotelFaqDocument.hotel_id == hotel_id).order_by(HotelFaqDocument.id)
+        ).all()
         for doc in docs:
-            _chunk_upload(conn, hotel_id, int(doc["id"]), doc["filename"], doc["body"])
-        conn.commit()
+            _chunk_upload(session, hotel_id, int(doc.id), doc.filename, doc.body)
     _reindex(hotel_id)
     return len(docs)
 

@@ -60,9 +60,9 @@ def answer(query: str, dates: str = "", hotel_id: str = "", guest_id: str = "") 
     dates = _resolve_dates(query, dates)
     guest_id = guest_id.strip()
     hotel_id = hotel_id.strip()
-    if guest_id and hotel_id and _guest_has_paid(guest_id, hotel_id):
-        return _paid_guest_answer(query, dates, guest_id, hotel_id)
     last = _last_line(query)
+    if guest_id and hotel_id and _guest_has_paid(guest_id, hotel_id) and not _chosen_on_last(last):
+        return _paid_guest_answer(query, dates, guest_id, hotel_id)
     cards = _ordered_cards(last)
     if cards and not _place_search(last) and not _chosen_anywhere(query):
         return _menu(query, dates, cards, hotel_id)
@@ -795,22 +795,26 @@ def _funnel(result: dict, hotel_id: str, guest_id: str) -> dict:
     paid = _guest_has_paid(guest_id, hotel_id)
     hotel_name = _hotel_name(hotel_id)
     account = _guest_account(guest_id)
-    if account is None:
-        if _chosen_on_last(last):
+    if _chosen_on_last(last):
+        facts = _choice_facts(result, hotel_id, hotel_name)
+        if account is None:
             return _hold(
                 result,
                 hotel_id,
-                f"{_choice_facts(result, hotel_id, hotel_name)} Далее вам нужно зарегистрироваться. {_register_line(hotel_name)}",
+                f"{facts} Далее вам нужно зарегистрироваться. {_register_line(hotel_name)}",
             )
-        return _hold(result, hotel_id, f"Сначала регистрация. {_register_line(hotel_name)}")
-    guest_id = account["id"]
-    if not paid and _chosen_on_last(last):
+        if not paid:
+            return _hold(result, hotel_id, f"{facts} {_entered(account['name'])}", account["id"])
         return _hold(
             result,
             hotel_id,
-            f"{_choice_facts(result, hotel_id, hotel_name)} {_entered(account['name'])}",
-            guest_id,
+            f"{facts} Бронь уже оплачена. Можно спрашивать дальше по этому отелю.",
+            account["id"],
+            True,
         )
+    if account is None:
+        return _hold(result, hotel_id, f"Сначала регистрация. {_register_line(hotel_name)}")
+    guest_id = account["id"]
     if not paid:
         if _pay_intent(last):
             dates = result.get("dates") or ""

@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from common.db import connect, init_db
+from sqlalchemy import case, func, select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+from common.database import session_scope
+from common.db import init_db
+from common.tables import Account, Booking, HotelRegistration, Message
 from geo.service import get_hotel, list_hotels
 from hotel_faq.service import answer_question as faq_answer
 from hotel_faq.service import get_config as faq_get_config
@@ -24,12 +29,12 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _account_row(row) -> dict:
+def _account_row(row: Account) -> dict:
     return {
-        "id": row["id"],
-        "role": row["role"],
-        "name": row["name"],
-        "hotel_id": row["hotel_id"],
+        "id": row.id,
+        "role": row.role,
+        "name": row.name,
+        "hotel_id": row.hotel_id,
     }
 
 
@@ -49,19 +54,14 @@ def _match_snapshot(name: str) -> str | None:
     return None
 
 
-def _registrations(conn) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT account_id, name, address, hotel_id
-        FROM hotel_registrations ORDER BY id
-        """
-    ).fetchall()
+def _registrations(session) -> list[dict]:
+    rows = session.scalars(select(HotelRegistration).order_by(HotelRegistration.id)).all()
     return [
         {
-            "account_id": row["account_id"],
-            "name": row["name"],
-            "address": row["address"] or "",
-            "hotel_id": row["hotel_id"],
+            "account_id": row.account_id,
+            "name": row.name,
+            "address": row.address or "",
+            "hotel_id": row.hotel_id,
         }
         for row in rows
     ]
@@ -72,26 +72,19 @@ def _resolve_hotel(hotel_id: str) -> dict | None:
     if found:
         return found
     init_db()
-    with connect() as conn:
-        row = conn.execute(
-            "SELECT name, address, hotel_id FROM hotel_registrations WHERE hotel_id = ?",
-            (hotel_id,),
-        ).fetchone()
+    with session_scope() as session:
+        row = session.scalar(select(HotelRegistration).where(HotelRegistration.hotel_id == hotel_id))
     if row is None:
         return None
-    return {"id": row["hotel_id"], "name": row["name"], "address": row["address"] or ""}
+    return {"id": row.hotel_id, "name": row.name, "address": row.address or ""}
 
 
 def list_accounts() -> dict:
     init_db()
-    with connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, role, name, hotel_id FROM accounts
-            ORDER BY CASE role WHEN 'guest' THEN 0 ELSE 1 END, name
-            """
-        ).fetchall()
-        registrations = _registrations(conn)
+    with session_scope() as session:
+        guest_first = case((Account.role == "guest", 0), else_=1)
+        rows = session.scalars(select(Account).order_by(guest_first, Account.name)).all()
+        registrations = _registrations(session)
     hotels = [
         {"id": hotel["id"], "name": hotel["name"], "address": hotel["address"]}
         for hotel in list_hotels()
@@ -117,41 +110,42 @@ def register_hotel(name: str, address: str = "") -> dict:
     place = " ".join((address or "").split())
     matched = _match_snapshot(clean)
     init_db()
-    with connect() as conn:
+    with session_scope() as session:
         if matched:
             hotel_id = matched
             account_id = f"hotelier-{hotel_id}"
         else:
-            seq = conn.execute("SELECT COUNT(*) AS n FROM hotel_registrations").fetchone()["n"] + 1
+            seq = session.scalar(select(func.count()).select_from(HotelRegistration)) + 1
             hotel_id = f"registered-{seq}"
-            while conn.execute(
-                "SELECT 1 FROM hotel_registrations WHERE hotel_id = ?",
-                (hotel_id,),
-            ).fetchone():
+            while session.scalar(select(HotelRegistration.id).where(HotelRegistration.hotel_id == hotel_id)):
                 seq += 1
                 hotel_id = f"registered-{seq}"
             account_id = f"hotelier-{hotel_id}"
-        existing = conn.execute(
-            "SELECT account_id, name, address FROM hotel_registrations WHERE hotel_id = ?",
-            (hotel_id,),
-        ).fetchone()
+        existing = session.scalar(select(HotelRegistration).where(HotelRegistration.hotel_id == hotel_id))
         if existing is None:
-            conn.execute(
-                """
-                INSERT INTO accounts (id, role, name, hotel_id) VALUES (?, 'hotelier', ?, ?)
-                ON CONFLICT(id) DO UPDATE SET name = excluded.name, hotel_id = excluded.hotel_id
-                """,
-                (account_id, f"Отельер · {clean}", hotel_id),
+            stmt = sqlite_insert(Account).values(
+                id=account_id,
+                role="hotelier",
+                name=f"Отельер · {clean}",
+                hotel_id=hotel_id,
             )
-            conn.execute(
-                """
-                INSERT INTO hotel_registrations (account_id, name, address, hotel_id, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (account_id, clean, place, hotel_id, _now()),
+            session.execute(
+                stmt.on_conflict_do_update(
+                    index_elements=[Account.id],
+                    set_={"name": stmt.excluded.name, "hotel_id": stmt.excluded.hotel_id},
+                )
+            )
+            session.add(
+                HotelRegistration(
+                    account_id=account_id,
+                    name=clean,
+                    address=place,
+                    hotel_id=hotel_id,
+                    created_at=_now(),
+                )
             )
         else:
-            account_id = existing["account_id"]
+            account_id = existing.account_id
     return {
         "account_id": account_id,
         "hotel_id": hotel_id,
@@ -166,96 +160,82 @@ def create_guest(name: str) -> dict:
     if not clean:
         raise ValueError("Нужно имя гостя")
     init_db()
-    with connect() as conn:
-        seq = conn.execute("SELECT COUNT(*) AS n FROM accounts WHERE role = 'guest'").fetchone()["n"] + 1
+    with session_scope() as session:
+        seq = session.scalar(select(func.count()).select_from(Account).where(Account.role == "guest")) + 1
         account_id = f"guest-{seq}"
-        while conn.execute("SELECT 1 FROM accounts WHERE id = ?", (account_id,)).fetchone():
+        while session.get(Account, account_id) is not None:
             seq += 1
             account_id = f"guest-{seq}"
-        conn.execute(
-            "INSERT INTO accounts (id, role, name, hotel_id) VALUES (?, 'guest', ?, NULL)",
-            (account_id, clean),
-        )
+        session.add(Account(id=account_id, role="guest", name=clean, hotel_id=None))
     return {"id": account_id, "role": "guest", "name": clean, "hotel_id": None}
 
 
 def _require(account_id: str) -> dict:
     init_db()
-    with connect() as conn:
-        row = conn.execute(
-            "SELECT id, role, name, hotel_id FROM accounts WHERE id = ?",
-            (account_id,),
-        ).fetchone()
+    with session_scope() as session:
+        row = session.get(Account, account_id)
     if row is None:
         raise ValueError("Такого счёта нет")
     return _account_row(row)
 
 
-def _messages(hotel_id: str) -> list[dict]:
-    with connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT m.id, m.hotel_id, m.guest_id, m.author_role, m.author_id, m.body, m.created_at,
-                   a.name AS author_name
-            FROM messages m
-            LEFT JOIN accounts a ON a.id = m.author_id
-            WHERE m.hotel_id = ?
-            ORDER BY m.id
-            """,
-            (hotel_id,),
-        ).fetchall()
+def _messages(hotel_id: str, viewer: str = "") -> list[dict]:
+    with session_scope() as session:
+        query = (
+            select(Message, Account.name)
+            .outerjoin(Account, Account.id == Message.author_id)
+            .where(Message.hotel_id == hotel_id)
+            .order_by(Message.id)
+        )
+        if viewer in ("guest", "hotelier"):
+            query = query.where(Message.author_role != "system")
+        if viewer == "guest":
+            query = query.where(Message.hidden_for_guest == 0)
+        elif viewer == "hotelier":
+            query = query.where(Message.hidden_for_hotelier == 0)
+        rows = session.execute(query).all()
     return [
         {
-            "id": row["id"],
-            "hotel_id": row["hotel_id"],
-            "guest_id": row["guest_id"],
-            "author_role": row["author_role"],
-            "author_id": row["author_id"],
-            "author_name": row["author_name"] or "Hotel Fact Agent",
-            "body": row["body"],
-            "created_at": row["created_at"],
+            "id": message.id,
+            "hotel_id": message.hotel_id,
+            "guest_id": message.guest_id,
+            "author_role": message.author_role,
+            "author_id": message.author_id,
+            "author_name": author_name or "Hotel Fact Agent",
+            "body": message.body,
+            "created_at": message.created_at,
         }
-        for row in rows
+        for message, author_name in rows
     ]
 
 
 def _bookings(guest_id: str | None = None, hotel_id: str | None = None) -> list[dict]:
-    clauses = []
-    params: list[str] = []
-    if guest_id:
-        clauses.append("guest_id = ?")
-        params.append(guest_id)
-    if hotel_id:
-        clauses.append("hotel_id = ?")
-        params.append(hotel_id)
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    with connect() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT id, guest_id, hotel_id, check_in, check_out, nights, amount_rub, status, created_at
-            FROM bookings {where} ORDER BY id DESC
-            """,
-            params,
-        ).fetchall()
+    with session_scope() as session:
+        query = select(Booking).order_by(Booking.id.desc())
+        if guest_id:
+            query = query.where(Booking.guest_id == guest_id)
+        if hotel_id:
+            query = query.where(Booking.hotel_id == hotel_id)
+        rows = session.scalars(query).all()
+        registrations = _registrations(session)
     hotels = {hotel["id"]: hotel for hotel in list_hotels()}
-    with connect() as conn:
-        for item in _registrations(conn):
-            hotels.setdefault(item["hotel_id"], {"name": item["name"]})
+    for item in registrations:
+        hotels.setdefault(item["hotel_id"], {"name": item["name"]})
     items = []
     for row in rows:
-        hotel = hotels.get(row["hotel_id"]) or {}
+        hotel = hotels.get(row.hotel_id) or {}
         items.append(
             {
-                "id": row["id"],
-                "guest_id": row["guest_id"],
-                "hotel_id": row["hotel_id"],
-                "hotel_name": hotel.get("name") or row["hotel_id"],
-                "check_in": row["check_in"],
-                "check_out": row["check_out"],
-                "nights": row["nights"],
-                "amount_rub": row["amount_rub"],
-                "status": row["status"],
-                "created_at": row["created_at"],
+                "id": row.id,
+                "guest_id": row.guest_id,
+                "hotel_id": row.hotel_id,
+                "hotel_name": hotel.get("name") or row.hotel_id,
+                "check_in": row.check_in,
+                "check_out": row.check_out,
+                "nights": row.nights,
+                "amount_rub": row.amount_rub,
+                "status": row.status,
+                "created_at": row.created_at,
             }
         )
     return items
@@ -266,10 +246,10 @@ def desk(account_id: str) -> dict:
     hotel_id = account.get("hotel_id")
     if account["role"] == "guest":
         hotel_ids = [hotel["id"] for hotel in list_accounts()["hotels"]]
-        threads = {hotel_id: _messages(hotel_id) for hotel_id in hotel_ids}
+        threads = {hotel_id: _messages(hotel_id, viewer="guest") for hotel_id in hotel_ids}
         bookings = _bookings(guest_id=account_id)
     else:
-        threads = {hotel_id: _messages(hotel_id)} if hotel_id else {}
+        threads = {hotel_id: _messages(hotel_id, viewer="hotelier")} if hotel_id else {}
         bookings = _bookings(hotel_id=hotel_id)
     return {
         "account": account,
@@ -287,27 +267,24 @@ def remember_question(hotel_id: str, question: str) -> None:
     if not text or get_hotel(hotel_id) is None:
         return
     init_db()
-    with connect() as conn:
-        last = conn.execute(
-            """
-            SELECT body, author_role FROM messages
-            WHERE hotel_id = ? ORDER BY id DESC LIMIT 1
-            """,
-            (hotel_id,),
-        ).fetchone()
-        if last and last["author_role"] == "agent" and last["body"] == text:
+    with session_scope() as session:
+        last = session.scalar(select(Message).where(Message.hotel_id == hotel_id).order_by(Message.id.desc()).limit(1))
+        if last and last.author_role == "agent" and last.body == text:
             return
-        conn.execute(
-            """
-            INSERT INTO messages (hotel_id, guest_id, author_role, author_id, body, created_at)
-            VALUES (?, NULL, 'system', 'hotel-fact-agent', ?, ?)
-            """,
-            (hotel_id, text, _now()),
+        session.add(
+            Message(
+                hotel_id=hotel_id,
+                guest_id=None,
+                author_role="system",
+                author_id="hotel-fact-agent",
+                body=text,
+                created_at=_now(),
+            )
         )
 
 
 def _insert_message(
-    conn,
+    session,
     *,
     hotel_id: str,
     guest_id: str | None,
@@ -315,12 +292,15 @@ def _insert_message(
     author_id: str,
     body: str,
 ) -> None:
-    conn.execute(
-        """
-        INSERT INTO messages (hotel_id, guest_id, author_role, author_id, body, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (hotel_id, guest_id, author_role, author_id, body, _now()),
+    session.add(
+        Message(
+            hotel_id=hotel_id,
+            guest_id=guest_id,
+            author_role=author_role,
+            author_id=author_id,
+            body=body,
+            created_at=_now(),
+        )
     )
 
 
@@ -370,37 +350,21 @@ def post_booking_ask(guest_id: str, hotel_id: str, text: str) -> dict:
     from common.post_booking_routing import is_quiet_side_question
     from search.service import quiet_side_reply
 
-    faq_result = faq_answer(hotel_id, body)
     if is_quiet_side_question(body):
         fact_text, known = quiet_side_reply(hotel_id)
-        if known:
-            return {
-                "header": header,
-                "reply": fact_text,
-                "route": "fact_agent",
-                "question": body,
-                "hotel_id": hotel_id,
-                "booking": paid,
-            }
-        if faq_result.get("mode") == "answer":
-            return {
-                "header": header,
-                "reply": faq_result.get("message") or "",
-                "route": "hotelier",
-                "question": body,
-                "hotel_id": hotel_id,
-                "booking": paid,
-            }
-        return {
+        payload = {
             "header": header,
             "reply": fact_text,
-            "route": "agent",
-            "suggest_hotelier_chat": True,
+            "route": "fact_agent" if known else "agent",
             "question": body,
             "hotel_id": hotel_id,
             "booking": paid,
         }
+        if not known:
+            payload["suggest_hotelier_chat"] = True
+        return payload
 
+    faq_result = faq_answer(hotel_id, body)
     if faq_result.get("mode") == "human":
         ask(guest_id, hotel_id, body)
         return {
@@ -412,6 +376,7 @@ def post_booking_ask(guest_id: str, hotel_id: str, text: str) -> dict:
             "booking": paid,
         }
 
+    fact = None
     fact_first = is_fact_agent_question(body) and not is_hotel_kb_question(body)
     if fact_first:
         fact = post_booking_fact_answer(hotel_id, body, dates)
@@ -425,28 +390,8 @@ def post_booking_ask(guest_id: str, hotel_id: str, text: str) -> dict:
                 "hotel_id": hotel_id,
                 "booking": paid,
             }
-        if fact.get("weak") and is_quiet_side_question(body):
-            if faq_result.get("mode") == "answer":
-                return {
-                    "header": header,
-                    "reply": faq_result.get("message") or "",
-                    "route": "hotelier",
-                    "question": body,
-                    "hotel_id": hotel_id,
-                    "booking": paid,
-                }
-            reply, _ = quiet_side_reply(hotel_id)
-            return {
-                "header": header,
-                "reply": reply,
-                "route": "agent",
-                "suggest_hotelier_chat": True,
-                "question": body,
-                "hotel_id": hotel_id,
-                "booking": paid,
-            }
 
-    if faq_result.get("mode") == "answer":
+    if is_hotel_kb_question(body) and faq_result.get("mode") == "answer":
         return {
             "header": header,
             "reply": faq_result.get("message") or "",
@@ -456,19 +401,18 @@ def post_booking_ask(guest_id: str, hotel_id: str, text: str) -> dict:
             "booking": paid,
         }
 
-    if not fact_first:
+    if fact is None:
         fact = post_booking_fact_answer(hotel_id, body, dates)
-        reply = (fact.get("reply") or "").strip()
-        low = reply.lower()
-        if reply and not fact.get("weak") and "не знаем" not in low:
-            return {
-                "header": header,
-                "reply": reply,
-                "route": "fact_agent",
-                "question": body,
-                "hotel_id": hotel_id,
-                "booking": paid,
-            }
+    reply = (fact.get("reply") or "").strip()
+    if _usable_guest_reply(reply):
+        return {
+            "header": header,
+            "reply": reply,
+            "route": "fact_agent",
+            "question": body,
+            "hotel_id": hotel_id,
+            "booking": paid,
+        }
 
     ask(guest_id, hotel_id, body)
     cards_hint = f"Fact Agent отвечает по картам: {FACT_AGENT_CARDS}."
@@ -484,6 +428,35 @@ def post_booking_ask(guest_id: str, hotel_id: str, text: str) -> dict:
     }
 
 
+def _usable_guest_reply(reply: str) -> bool:
+    text = (reply or "").strip()
+    if len(text) < 8:
+        return False
+    low = text.lower()
+    return low not in {"отель.", "отель"} and not low.endswith(". отель.")
+
+
+def _chat_pair(guest_id: str, hotel_id: str, question: str, reply: str, author_id: str) -> dict:
+    with session_scope() as session:
+        _insert_message(
+            session,
+            hotel_id=hotel_id,
+            guest_id=guest_id,
+            author_role="guest",
+            author_id=guest_id,
+            body=question,
+        )
+        _insert_message(
+            session,
+            hotel_id=hotel_id,
+            guest_id=guest_id,
+            author_role="hotelier",
+            author_id=author_id,
+            body=reply,
+        )
+    return {"threads": {hotel_id: _messages(hotel_id, viewer="guest")}, "faq": {"mode": author_id}}
+
+
 def ask(guest_id: str, hotel_id: str, text: str) -> dict:
     from common.post_booking_routing import is_quiet_side_question
     from search.service import quiet_side_reply
@@ -496,79 +469,36 @@ def ask(guest_id: str, hotel_id: str, text: str) -> dict:
     body = text.strip()
     if not body:
         raise ValueError("Пустой вопрос")
+    if is_quiet_side_question(body):
+        fact_text, _known = quiet_side_reply(hotel_id)
+        return _chat_pair(guest_id, hotel_id, body, fact_text, "fact-snapshot")
+    from common.post_booking_routing import is_fact_agent_question, is_hotel_kb_question
+    from search.service import post_booking_fact_answer
+
+    if is_fact_agent_question(body) and not is_hotel_kb_question(body):
+        paid = _latest_paid_booking(guest_id, hotel_id)
+        dates = ""
+        if paid:
+            dates = paid["check_in"]
+            if paid.get("check_out") and paid["check_out"] != paid["check_in"]:
+                dates = f"{paid['check_in']}/{paid['check_out']}"
+        fact = post_booking_fact_answer(hotel_id, body, dates)
+        reply = (fact.get("reply") or "").strip()
+        if not _usable_guest_reply(reply):
+            reply = "Этого в снимке нет."
+        return _chat_pair(guest_id, hotel_id, body, reply, "fact-snapshot")
     faq_result = faq_answer(hotel_id, body)
-    with connect() as conn:
-        _insert_message(
-            conn,
-            hotel_id=hotel_id,
-            guest_id=guest_id,
-            author_role="guest",
-            author_id=guest_id,
-            body=body,
-        )
-        mode = faq_result.get("mode")
-        if is_quiet_side_question(body):
-            fact_text, known = quiet_side_reply(hotel_id)
-            if known:
-                _insert_message(
-                    conn,
-                    hotel_id=hotel_id,
-                    guest_id=guest_id,
-                    author_role="hotelier",
-                    author_id="hotel-kb",
-                    body=fact_text,
-                )
-            elif mode == "answer":
-                _insert_message(
-                    conn,
-                    hotel_id=hotel_id,
-                    guest_id=guest_id,
-                    author_role="hotelier",
-                    author_id="hotel-kb",
-                    body=faq_result.get("message") or "",
-                )
-            else:
-                note = faq_result.get("message") or "Передал живому отельеру."
-                _insert_message(
-                    conn,
-                    hotel_id=hotel_id,
-                    guest_id=guest_id,
-                    author_role="hotelier",
-                    author_id="hotel-kb",
-                    body=f"{fact_text} {note}".strip(),
-                )
-        elif mode == "answer":
-            _insert_message(
-                conn,
-                hotel_id=hotel_id,
-                guest_id=guest_id,
-                author_role="hotelier",
-                author_id="hotel-kb",
-                body=faq_result.get("message") or "",
-            )
-        elif mode in {"escalate", "human"}:
-            note = faq_result.get("message") or "Передал живому отельеру."
-            _insert_message(
-                conn,
-                hotel_id=hotel_id,
-                guest_id=guest_id,
-                author_role="hotelier",
-                author_id="hotel-kb",
-                body=note,
-            )
-        elif mode == "geo_redirect":
-            _insert_message(
-                conn,
-                hotel_id=hotel_id,
-                guest_id=guest_id,
-                author_role="hotelier",
-                author_id="hotel-kb",
-                body=(
-                    "По картам Fact Agent на главной можно уточнить гео и окружение. "
-                    "Здесь отвечаю как отельер: напишите «живой человек», если нужен сотрудник."
-                ),
-            )
-    return {"threads": {hotel_id: _messages(hotel_id)}, "faq": faq_result}
+    mode = faq_result.get("mode")
+    if mode == "answer":
+        reply = faq_result.get("message") or "В базе знаний нет ответа."
+        author = "hotel-kb"
+    elif mode in {"escalate", "human"}:
+        reply = faq_result.get("message") or "Передал живому отельеру."
+        author = "hotelier-live"
+    else:
+        reply = "Этого нет ни в снимке, ни в базе знаний. Вопрос передан живому отельеру."
+        author = "hotelier-live"
+    return _chat_pair(guest_id, hotel_id, body, reply, author)
 
 
 def send_reply(account_id: str, text: str) -> dict:
@@ -579,15 +509,49 @@ def send_reply(account_id: str, text: str) -> dict:
     if not body:
         raise ValueError("Пустой ответ")
     hotel_id = account["hotel_id"]
-    with connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO messages (hotel_id, guest_id, author_role, author_id, body, created_at)
-            VALUES (?, NULL, 'hotelier', ?, ?, ?)
-            """,
-            (hotel_id, account_id, body, _now()),
+    with session_scope() as session:
+        guest_id = session.scalar(
+            select(Message.guest_id)
+            .where(
+                Message.hotel_id == hotel_id,
+                Message.author_role == "guest",
+                Message.guest_id.is_not(None),
+            )
+            .order_by(Message.id.desc())
+            .limit(1)
         )
-    return {"threads": {hotel_id: _messages(hotel_id)}}
+        _insert_message(
+            session,
+            hotel_id=hotel_id,
+            guest_id=guest_id,
+            author_role="hotelier",
+            author_id=account_id,
+            body=body,
+        )
+    return {"threads": {hotel_id: _messages(hotel_id, viewer="hotelier")}}
+
+
+def hide_message(account_id: str, message_id: int, scope: str) -> dict:
+    account = _require(account_id)
+    if scope not in ("me", "both"):
+        raise ValueError("Нужно выбрать, у кого скрыть сообщение")
+    with session_scope() as session:
+        row = session.get(Message, message_id)
+        if row is None:
+            raise ValueError("Этого сообщения нет")
+        if account["role"] == "guest":
+            if row.guest_id != account_id:
+                raise ValueError("Этого сообщения в вашем чате нет")
+            row.hidden_for_guest = 1
+            if scope == "both":
+                row.hidden_for_hotelier = 1
+        elif account["role"] == "hotelier" and row.hotel_id == account.get("hotel_id"):
+            row.hidden_for_hotelier = 1
+            if scope == "both":
+                row.hidden_for_guest = 1
+        else:
+            raise ValueError("Этого сообщения в вашем чате нет")
+    return desk(account_id)
 
 
 def quote(check_in: str, check_out: str) -> int:
@@ -608,15 +572,19 @@ def pay(guest_id: str, hotel_id: str, check_in: str, check_out: str) -> dict:
         raise ValueError("Этого отеля нет среди зарегистрированных")
     nights = quote(check_in, check_out)
     amount = nights * NIGHT_RUB
-    with connect() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO bookings (
-                guest_id, hotel_id, check_in, check_out, nights, amount_rub, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'paid', ?)
-            """,
-            (guest_id, hotel_id, check_in, check_out, nights, amount, _now()),
+    with session_scope() as session:
+        booking_row = Booking(
+            guest_id=guest_id,
+            hotel_id=hotel_id,
+            check_in=check_in,
+            check_out=check_out,
+            nights=nights,
+            amount_rub=amount,
+            status="paid",
+            created_at=_now(),
         )
-        booking_id = cursor.lastrowid
+        session.add(booking_row)
+        session.flush()
+        booking_id = booking_row.id
     booking = next(item for item in _bookings(guest_id=guest_id) if item["id"] == booking_id)
     return {"booking": booking, "payment_note": PAYMENT_NOTE}

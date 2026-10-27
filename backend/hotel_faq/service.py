@@ -7,7 +7,11 @@ import os
 import re
 from datetime import datetime, timezone
 
-from common.db import connect, init_db
+from sqlalchemy import delete, func, select
+
+from common.database import session_scope
+from common.db import init_db
+from common.tables import HotelFaqChunk, HotelFaqConfig, HotelFaqDocument
 from hotel_faq.chunking import split_chunks_overlap
 from hotel_faq.rag import Chunk, TfidfIndex, split_chunks
 
@@ -51,7 +55,7 @@ DEFAULT_SECTIONS = {
     "checkin": "Заезд с 15:00, выезд до 12:00. Ранний заезд и поздний выезд — по запросу.",
     "breakfast": "Завтрак «шведский стол» 07:00–11:00. В тариф не входит.",
     "parking": "Охраняемой парковки у здания нет. Ближайшие платные места — на ресепшене.",
-    "pets": "",
+    "pets": "Да, можно с домашними животными небольшого размера (кошками и собаками).",
     "other": "Wi‑Fi в лобби и номерах. Багаж можно оставить до заезда при наличии места.",
 }
 
@@ -66,62 +70,24 @@ def ping() -> dict:
     return {"status": "ok", "service": "hotel_faq", "engine": "tfidf-rag"}
 
 
-def _ensure_schema(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS hotel_faq_config (
-            hotel_id TEXT PRIMARY KEY,
-            enabled INTEGER NOT NULL DEFAULT 0,
-            sections_json TEXT NOT NULL DEFAULT '{}',
-            updated_at TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS hotel_faq_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hotel_id TEXT NOT NULL,
-            filename TEXT NOT NULL,
-            body TEXT NOT NULL,
-            uploaded_at TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS hotel_faq_chunks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hotel_id TEXT NOT NULL,
-            source TEXT NOT NULL,
-            text TEXT NOT NULL
-        )
-        """
-    )
-
-
 def init_faq_db() -> None:
     init_db()
-    with connect() as conn:
-        _ensure_schema(conn)
-        _seed_pekin(conn)
+    with session_scope() as session:
+        _seed_pekin(session)
 
 
-def _seed_pekin(conn) -> None:
-    row = conn.execute(
-        "SELECT 1 FROM hotel_faq_config WHERE hotel_id = ?",
-        ("pekin",),
-    ).fetchone()
-    if row:
+def _seed_pekin(session) -> None:
+    if session.get(HotelFaqConfig, "pekin") is not None:
         return
-    conn.execute(
-        """
-        INSERT INTO hotel_faq_config (hotel_id, enabled, sections_json, updated_at)
-        VALUES (?, 1, ?, ?)
-        """,
-        ("pekin", json.dumps(DEFAULT_SECTIONS, ensure_ascii=False), _now()),
+    session.add(
+        HotelFaqConfig(
+            hotel_id="pekin",
+            enabled=1,
+            sections_json=json.dumps(DEFAULT_SECTIONS, ensure_ascii=False),
+            updated_at=_now(),
+        )
     )
-    _rebuild_section_chunks(conn, "pekin", DEFAULT_SECTIONS)
+    _rebuild_section_chunks(session, "pekin", DEFAULT_SECTIONS)
 
 
 def _load_sections(raw: str | None) -> dict[str, str]:
@@ -138,10 +104,12 @@ def _load_sections(raw: str | None) -> dict[str, str]:
     return merged
 
 
-def _rebuild_section_chunks(conn, hotel_id: str, sections: dict[str, str]) -> None:
-    conn.execute(
-        "DELETE FROM hotel_faq_chunks WHERE hotel_id = ? AND source LIKE 'section:%'",
-        (hotel_id,),
+def _rebuild_section_chunks(session, hotel_id: str, sections: dict[str, str]) -> None:
+    session.execute(
+        delete(HotelFaqChunk).where(
+            HotelFaqChunk.hotel_id == hotel_id,
+            HotelFaqChunk.source.like("section:%"),
+        )
     )
     cid = 1
     for section_id, body in sections.items():
@@ -150,36 +118,33 @@ def _rebuild_section_chunks(conn, hotel_id: str, sections: dict[str, str]) -> No
             continue
         source = f"section:{section_id}"
         chunks, cid = split_chunks(text, source, cid)
-        for chunk in chunks:
-            conn.execute(
-                "INSERT INTO hotel_faq_chunks (hotel_id, source, text) VALUES (?, ?, ?)",
-                (hotel_id, chunk.source, chunk.text),
-            )
+        session.add_all(
+            HotelFaqChunk(hotel_id=hotel_id, source=chunk.source, text=chunk.text) for chunk in chunks
+        )
 
 
-def _chunk_upload(conn, hotel_id: str, doc_id: int, filename: str, body: str) -> None:
+def _chunk_upload(session, hotel_id: str, doc_id: int, filename: str, body: str) -> None:
     prefix = f"upload:{doc_id}:"
-    conn.execute(
-        "DELETE FROM hotel_faq_chunks WHERE hotel_id = ? AND source LIKE ?",
-        (hotel_id, f"{prefix}%"),
+    session.execute(
+        delete(HotelFaqChunk).where(
+            HotelFaqChunk.hotel_id == hotel_id,
+            HotelFaqChunk.source.like(f"{prefix}%"),
+        )
     )
     source = f"upload:{doc_id}:{filename}"
     chunks, _ = split_chunks_overlap(body, source, 1)
-    for chunk in chunks:
-        conn.execute(
-            "INSERT INTO hotel_faq_chunks (hotel_id, source, text) VALUES (?, ?, ?)",
-            (hotel_id, chunk.source, chunk.text),
-        )
+    session.add_all(
+        HotelFaqChunk(hotel_id=hotel_id, source=chunk.source, text=chunk.text) for chunk in chunks
+    )
 
 
 def _chunks_for_hotel(hotel_id: str) -> list[Chunk]:
     init_faq_db()
-    with connect() as conn:
-        rows = conn.execute(
-            "SELECT id, source, text FROM hotel_faq_chunks WHERE hotel_id = ? ORDER BY id",
-            (hotel_id,),
-        ).fetchall()
-    return [Chunk(chunk_id=row["id"], source=row["source"], text=row["text"]) for row in rows]
+    with session_scope() as session:
+        rows = session.scalars(
+            select(HotelFaqChunk).where(HotelFaqChunk.hotel_id == hotel_id).order_by(HotelFaqChunk.id)
+        ).all()
+    return [Chunk(chunk_id=row.id, source=row.source, text=row.text) for row in rows]
 
 
 def _reindex(hotel_id: str) -> None:
@@ -187,13 +152,6 @@ def _reindex(hotel_id: str) -> None:
     index = TfidfIndex()
     index.build(chunks)
     _INDEX[hotel_id] = index
-    try:
-        from hotel_faq.vector_store import rebuild_vector_index
-
-        upload_chunks = [chunk for chunk in chunks if chunk.source.startswith("upload:")]
-        rebuild_vector_index(hotel_id, upload_chunks or chunks)
-    except ImportError:
-        pass
 
 
 def vector_retrieve(hotel_id: str, question: str, *, top_k: int = 4) -> dict:
@@ -211,83 +169,71 @@ def vector_retrieve(hotel_id: str, question: str, *, top_k: int = 4) -> dict:
         return vector_search(hotel_id, question, top_k=top_k)
 
 
-def _config_row(conn, hotel_id: str):
-    row = conn.execute(
-        "SELECT hotel_id, enabled, sections_json, updated_at FROM hotel_faq_config WHERE hotel_id = ?",
-        (hotel_id,),
-    ).fetchone()
+def _config_row(session, hotel_id: str) -> HotelFaqConfig:
+    row = session.get(HotelFaqConfig, hotel_id)
     if row:
         return row
-    conn.execute(
-        """
-        INSERT INTO hotel_faq_config (hotel_id, enabled, sections_json, updated_at)
-        VALUES (?, 0, ?, ?)
-        """,
-        (hotel_id, json.dumps(DEFAULT_SECTIONS, ensure_ascii=False), _now()),
+    row = HotelFaqConfig(
+        hotel_id=hotel_id,
+        enabled=0,
+        sections_json=json.dumps(DEFAULT_SECTIONS, ensure_ascii=False),
+        updated_at=_now(),
     )
-    _rebuild_section_chunks(conn, hotel_id, DEFAULT_SECTIONS)
-    return conn.execute(
-        "SELECT hotel_id, enabled, sections_json, updated_at FROM hotel_faq_config WHERE hotel_id = ?",
-        (hotel_id,),
-    ).fetchone()
+    session.add(row)
+    _rebuild_section_chunks(session, hotel_id, DEFAULT_SECTIONS)
+    return row
 
 
 def get_config(hotel_id: str) -> dict:
     init_faq_db()
-    with connect() as conn:
-        row = _config_row(conn, hotel_id)
-        docs = conn.execute(
-            """
-            SELECT id, filename, LENGTH(body) AS chars, uploaded_at
-            FROM hotel_faq_documents WHERE hotel_id = ? ORDER BY id DESC
-            """,
-            (hotel_id,),
-        ).fetchall()
-        chunk_count = conn.execute(
-            "SELECT COUNT(*) AS n FROM hotel_faq_chunks WHERE hotel_id = ?",
-            (hotel_id,),
-        ).fetchone()["n"]
-    sections = _load_sections(row["sections_json"])
-    return {
-        "hotel_id": hotel_id,
-        "enabled": bool(row["enabled"]),
-        "sections": sections,
-        "section_labels": SECTION_LABELS,
-        "documents": [
+    with session_scope() as session:
+        row = _config_row(session, hotel_id)
+        docs = session.scalars(
+            select(HotelFaqDocument)
+            .where(HotelFaqDocument.hotel_id == hotel_id)
+            .order_by(HotelFaqDocument.id.desc())
+        ).all()
+        chunk_count = session.scalar(
+            select(func.count()).select_from(HotelFaqChunk).where(HotelFaqChunk.hotel_id == hotel_id)
+        )
+        sections = _load_sections(row.sections_json)
+        enabled = bool(row.enabled)
+        updated_at = row.updated_at
+        documents = [
             {
-                "id": doc["id"],
-                "filename": doc["filename"],
-                "chars": doc["chars"],
-                "uploaded_at": doc["uploaded_at"],
+                "id": doc.id,
+                "filename": doc.filename,
+                "chars": len(doc.body),
+                "uploaded_at": doc.uploaded_at,
             }
             for doc in docs
-        ],
+        ]
+    return {
+        "hotel_id": hotel_id,
+        "enabled": enabled,
+        "sections": sections,
+        "section_labels": SECTION_LABELS,
+        "documents": documents,
         "chunk_count": chunk_count,
-        "updated_at": row["updated_at"],
+        "updated_at": updated_at,
         "min_score": MIN_SCORE,
     }
 
 
 def save_config(hotel_id: str, enabled: bool | None, sections: dict[str, str] | None) -> dict:
     init_faq_db()
-    with connect() as conn:
-        row = _config_row(conn, hotel_id)
-        current = _load_sections(row["sections_json"])
+    with session_scope() as session:
+        row = _config_row(session, hotel_id)
+        current = _load_sections(row.sections_json)
         if sections is not None:
             for key, value in sections.items():
                 if key in SECTION_LABELS and isinstance(value, str):
                     current[key] = value
-        flag = bool(row["enabled"]) if enabled is None else bool(enabled)
-        updated = _now()
-        conn.execute(
-            """
-            UPDATE hotel_faq_config
-            SET enabled = ?, sections_json = ?, updated_at = ?
-            WHERE hotel_id = ?
-            """,
-            (1 if flag else 0, json.dumps(current, ensure_ascii=False), updated, hotel_id),
-        )
-        _rebuild_section_chunks(conn, hotel_id, current)
+        flag = bool(row.enabled) if enabled is None else bool(enabled)
+        row.enabled = 1 if flag else 0
+        row.sections_json = json.dumps(current, ensure_ascii=False)
+        row.updated_at = _now()
+        _rebuild_section_chunks(session, hotel_id, current)
     _reindex(hotel_id)
     return get_config(hotel_id)
 
@@ -303,50 +249,39 @@ def upload_document(hotel_id: str, filename: str, raw: bytes) -> dict:
     if not text.strip():
         raise ValueError("В файле нет текста")
     init_faq_db()
-    with connect() as conn:
-        _config_row(conn, hotel_id)
-        cursor = conn.execute(
-            """
-            INSERT INTO hotel_faq_documents (hotel_id, filename, body, uploaded_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (hotel_id, clean_name, text, _now()),
-        )
-        doc_id = int(cursor.lastrowid)
-        _chunk_upload(conn, hotel_id, doc_id, clean_name, text)
-        conn.execute(
-            "UPDATE hotel_faq_config SET updated_at = ? WHERE hotel_id = ?",
-            (_now(), hotel_id),
-        )
+    with session_scope() as session:
+        row = _config_row(session, hotel_id)
+        document = HotelFaqDocument(hotel_id=hotel_id, filename=clean_name, body=text, uploaded_at=_now())
+        session.add(document)
+        session.flush()
+        _chunk_upload(session, hotel_id, int(document.id), clean_name, text)
+        row.updated_at = _now()
     _reindex(hotel_id)
     return get_config(hotel_id)
 
 
 def delete_document(hotel_id: str, document_id: int) -> dict:
     init_faq_db()
-    with connect() as conn:
-        row = conn.execute(
-            """
-            SELECT id FROM hotel_faq_documents
-            WHERE hotel_id = ? AND id = ?
-            """,
-            (hotel_id, document_id),
-        ).fetchone()
-        if not row:
+    with session_scope() as session:
+        row = session.scalar(
+            select(HotelFaqDocument).where(
+                HotelFaqDocument.hotel_id == hotel_id,
+                HotelFaqDocument.id == document_id,
+            )
+        )
+        if row is None:
             raise ValueError("Документ не найден")
         prefix = f"upload:{document_id}:"
-        conn.execute(
-            "DELETE FROM hotel_faq_chunks WHERE hotel_id = ? AND source LIKE ?",
-            (hotel_id, f"{prefix}%"),
+        session.execute(
+            delete(HotelFaqChunk).where(
+                HotelFaqChunk.hotel_id == hotel_id,
+                HotelFaqChunk.source.like(f"{prefix}%"),
+            )
         )
-        conn.execute(
-            "DELETE FROM hotel_faq_documents WHERE hotel_id = ? AND id = ?",
-            (hotel_id, document_id),
-        )
-        conn.execute(
-            "UPDATE hotel_faq_config SET updated_at = ? WHERE hotel_id = ?",
-            (_now(), hotel_id),
-        )
+        session.delete(row)
+        config = session.get(HotelFaqConfig, hotel_id)
+        if config is not None:
+            config.updated_at = _now()
     _reindex(hotel_id)
     return get_config(hotel_id)
 
@@ -460,9 +395,10 @@ def answer_question(hotel_id: str, question: str) -> dict:
         }
 
     init_faq_db()
-    with connect() as conn:
-        row = _config_row(conn, hotel_id)
-    if not row["enabled"]:
+    with session_scope() as session:
+        row = _config_row(session, hotel_id)
+        enabled = bool(row.enabled)
+    if not enabled:
         return {
             "mode": "escalate",
             "reason": "disabled",

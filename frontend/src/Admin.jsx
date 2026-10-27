@@ -52,17 +52,22 @@ const HOTELIER_CHAT_EXAMPLES = [
 ]
 
 function isGuestChatMessage(message, accountId) {
-  if (message.author_role === 'faq_agent' || message.author_role === 'agent') return false
-  if (message.author_role === 'guest') {
-    return !accountId || message.author_id === accountId || message.guest_id === accountId
-  }
-  if (message.author_role === 'hotelier') {
-    if (message.author_id === 'hotel-kb') return true
-    const body = message.body || ''
-    if (/primary «|tertiary «|Счёт отеля|facade_noise|стриптиз/i.test(body)) return false
-    return body.length > 0 && body.length < 600
-  }
-  return false
+  if (!accountId) return false
+  const mine = message.guest_id === accountId || message.author_id === accountId
+  if (!mine) return false
+  if (message.author_role === 'guest') return true
+  if (message.author_role !== 'hotelier') return false
+  const body = message.body || ''
+  return !/primary «|tertiary «|Счёт отеля|facade_noise|стриптиз/i.test(body)
+}
+
+function chatCaption(message) {
+  if (message.author_role === 'guest') return 'Вопрос'
+  if (message.author_id === 'fact-snapshot') return 'Ответ · снимок окрестностей'
+  if (message.author_id === 'hotel-kb') return 'Ответ · база знаний'
+  if (message.author_id === 'gigachat') return 'Ответ · GigaChat'
+  if (message.author_id === 'hotelier-live') return 'Ответ · живой отельер'
+  return 'Ответ'
 }
 
 const FAQ_SECTIONS = [
@@ -109,8 +114,8 @@ function Admin({
 }) {
   const [catalog, setCatalog] = useState({ accounts: [], hotels: [], registrations: [], night_rub: 10000, payment_note: '' })
   const [accountId, setAccountId] = useState(() => initialAccountId || (entry === 'guest' ? 'guest' : ''))
-  const [hotelName, setHotelName] = useState('')
-  const [hotelAddress, setHotelAddress] = useState('')
+  const [hotelName, setHotelName] = useState('Пекин')
+  const [hotelAddress, setHotelAddress] = useState('Большая Садовая улица, 5/1')
   const [registeredNote, setRegisteredNote] = useState('')
   const [desk, setDesk] = useState(null)
   const [hotelId, setHotelId] = useState('')
@@ -122,7 +127,6 @@ function Admin({
   const [receipt, setReceipt] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [hotelierTab, setHotelierTab] = useState('desk')
   const [faqEnabled, setFaqEnabled] = useState(false)
   const [faqSections, setFaqSections] = useState(() => ({ ...FAQ_DEFAULT }))
   const [faqSavedAt, setFaqSavedAt] = useState(null)
@@ -170,7 +174,7 @@ function Admin({
     read(`/api/admin/accounts/${accountId}`)
       .then((body) => {
         setDesk(body)
-        setReply(body.draft || '')
+        if (body.account?.role !== 'hotelier') setReply(body.draft || '')
         applyFaqState(body.faq, {
           setFaqEnabled,
           setFaqSections,
@@ -180,7 +184,10 @@ function Admin({
         })
         setError('')
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        setError(err.message)
+        if (entry === 'guest' && onBack && /счёта нет/i.test(err.message || '')) onBack()
+      })
   }, [accountId])
 
   const account = desk?.account
@@ -259,6 +266,25 @@ function Admin({
   function submitHotelierChat(event) {
     event.preventDefault()
     askHotelier()
+  }
+
+  async function hideMessage(messageId, scope) {
+    if (!account?.id || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      setDesk(
+        await read('/api/admin/messages/hide', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: account.id, message_id: messageId, scope }),
+        }),
+      )
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function askHotelier(text) {
@@ -388,6 +414,7 @@ function Admin({
         body: JSON.stringify({ account_id: account.id, text: reply.trim() }),
       })
       setDesk((current) => ({ ...current, threads: { ...current.threads, ...body.threads } }))
+      setReply('')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -429,25 +456,30 @@ function Admin({
       </label>
       {!paidBooking ? (
         <form onSubmit={pay} className="grid gap-3 rounded-2xl border border-line bg-panel p-4">
-        <label className="flex flex-col gap-1 text-sm">
-          Заезд
-          <input type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} className="rounded-xl border border-line px-3 py-2" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Выезд
-          <input type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} className="rounded-xl border border-line px-3 py-2" />
-        </label>
-        <p className="text-sm">
-          {nights > 0 ? `${nightWord(nights)} · ${rub(amount)}` : 'Выезд должен быть позже заезда.'}
-        </p>
-        <button
-          type="submit"
-          disabled={busy || nights < 1}
-          className="rounded-xl bg-pine px-4 py-3 text-panel disabled:opacity-40"
-        >
-          Оплатить бронь
-        </button>
-      </form>
+          <div className="rounded-2xl border border-pine px-4 py-3 text-sm">
+            <p className="font-medium">К оплате</p>
+            <p className="mt-1">
+              {nights > 0
+                ? `${nightWord(nights)} · ${rub(amount)}. Номер карты не нужен, деньги не списываются.`
+                : 'Выезд должен быть позже заезда.'}
+            </p>
+          </div>
+          <label className="flex flex-col gap-1 text-sm">
+            Заезд
+            <input type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} className="rounded-xl border border-line px-3 py-2" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Выезд
+            <input type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} className="rounded-xl border border-line px-3 py-2" />
+          </label>
+          <button
+            type="submit"
+            disabled={busy || nights < 1}
+            className="rounded-xl bg-pine px-4 py-3 text-panel disabled:opacity-40"
+          >
+            Забронировать
+          </button>
+        </form>
       ) : (
         <div className="rounded-2xl border border-pine bg-panel px-4 py-3 text-sm">
           <p className="font-medium">Бронь №{paidBooking.id} · {paidBooking.hotel_name}</p>
@@ -466,11 +498,11 @@ function Admin({
         <section ref={chatSectionRef} className="rounded-2xl border border-line bg-panel p-4">
           <h3 className="font-serif text-xl">Чат с отельером</h3>
           <p className="mt-1 text-sm text-mute">
-            Сначала ответит база знаний отеля. Если ответа нет или он не подходит — подключится живой отельер.
+            Вопрос про парк, стадион и дорогу отвечает снимок окрестностей. Вопрос об отеле — база знаний. Если ответа нет, вопрос уходит живому отельеру.
           </p>
           {guestChatThread.length > 0 && (
             <div className="mt-4">
-              <Thread messages={guestChatThread} />
+              <Thread messages={guestChatThread} onHide={hideMessage} />
             </div>
           )}
           <p className="mt-4 text-xs font-medium tracking-wide text-mute uppercase">Примеры вопросов</p>
@@ -531,277 +563,242 @@ function Admin({
     )
   }
 
-  return (
-    <div className="min-h-svh bg-paper text-ink">
-      <div className="mx-auto grid min-h-svh max-w-6xl lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="border-line px-5 py-4 lg:border-r">
-          <p className="text-xs tracking-[0.18em] text-moss uppercase">Отельер</p>
-          <h1 className="font-serif text-3xl">Регистрация отеля</h1>
+  const hotelierThread = (desk?.threads?.[account?.hotel_id] || []).filter(
+    (message) => message.author_role !== 'system',
+  )
+
+  if (!account) {
+    return (
+      <div className="min-h-svh bg-paper text-ink">
+        <div className="mx-auto flex max-w-xl flex-col gap-4 px-5 py-4">
           {onBack && (
-            <button type="button" onClick={onBack} className="mt-2 text-sm text-moss underline">
+            <button type="button" onClick={onBack} className="self-start text-sm text-moss underline">
               На главную
             </button>
           )}
-          <p className="mt-3 text-sm text-mute">Сначала зарегистрируйте свой отель. Потом откроется его кабинет.</p>
-          <form onSubmit={registerHotel} className="mt-4 flex flex-col gap-2">
-            <input
-              value={hotelName}
-              onChange={(event) => setHotelName(event.target.value)}
-              placeholder="Название отеля"
-              className="rounded-xl border border-line bg-panel px-3 py-2 outline-none focus:border-pine"
-            />
-            <input
-              value={hotelAddress}
-              onChange={(event) => setHotelAddress(event.target.value)}
-              placeholder="Адрес"
-              className="rounded-xl border border-line bg-panel px-3 py-2 outline-none focus:border-pine"
-            />
-            <button type="submit" disabled={busy || !hotelName.trim()} className="rounded-xl bg-pine px-3 py-2 text-panel disabled:opacity-40">
-              Зарегистрировать и войти
-            </button>
-          </form>
-          <h2 className="mt-6 font-serif text-xl">Войти в кабинет</h2>
-          {(catalog.registrations || []).length === 0 ? (
-            <p className="mt-2 text-sm text-mute">Зарегистрированных отелей пока нет.</p>
+          {accountId && !error ? (
+            <p className="text-sm text-mute">Открываю кабинет отельера…</p>
           ) : (
-            <ul className="mt-2 flex flex-col gap-2">
-              {(catalog.registrations || []).map((item) => (
-                <li key={item.account_id}>
-                  <button
-                    type="button"
-                    onClick={() => setAccountId(item.account_id)}
-                    className={`w-full rounded-2xl border px-3 py-2 text-left ${
-                      accountId === item.account_id ? 'border-pine bg-panel' : 'border-line bg-panel/60'
-                    }`}
-                  >
-                    Войти · {item.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
-
-        <section className="flex flex-col gap-4 px-5 py-4">
-          {error && <p className="rounded-2xl border border-clay px-4 py-3 text-clay">{error}</p>}
-          {!account && <p className="text-mute">Кабинет откроется после регистрации отеля.</p>}
-          {account?.role === 'hotelier' && (
             <>
-              <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="font-serif text-2xl">{account.name}</h2>
-                  {registeredNote && <p className="mt-1 text-sm">{registeredNote}</p>}
-                  <p className="mt-1 text-sm text-mute">
-                    Fact Agent на главной считает гео-карты. Здесь — переписка и опциональный FAQ-агент.
-                  </p>
-                </div>
-                <div className="flex rounded-xl border border-line bg-panel p-1 text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setHotelierTab('desk')}
-                    className={`rounded-lg px-3 py-1.5 ${hotelierTab === 'desk' ? 'bg-pine text-panel' : 'text-mute'}`}
-                  >
-                    Переписка
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHotelierTab('faq')}
-                    className={`rounded-lg px-3 py-1.5 ${hotelierTab === 'faq' ? 'bg-pine text-panel' : 'text-mute'}`}
-                  >
-                    FAQ-агент
-                  </button>
-                </div>
-              </header>
-
-              {hotelierTab === 'desk' && (
-                <>
-                  <Thread messages={thread} />
-                  <form onSubmit={sendReply} className="flex flex-col gap-2 rounded-2xl border border-line bg-panel p-4">
-                    <p className="text-xs text-mute">
-                      Черновик — из фактов снимка (шум, этажность OSM). Категории номеров — только после вашего текста
-                      («стандарт во двор…»).
-                    </p>
-                    <textarea
-                      value={reply}
-                      onChange={(event) => setReply(event.target.value)}
-                      rows={6}
-                      className="resize-none rounded-xl border border-line px-3 py-2 outline-none focus:border-pine"
-                    />
-                    <button type="submit" disabled={busy || !reply.trim()} className="rounded-xl bg-pine px-4 py-3 text-panel disabled:opacity-40">
-                      Отправить из этого счёта
-                    </button>
-                  </form>
-                  <BookingList bookings={desk.bookings || []} />
-                </>
-              )}
-
-              {hotelierTab === 'faq' && (
-                <form onSubmit={saveFaqTemplate} className="flex flex-col gap-4">
-                  <div className="rounded-2xl border border-line bg-panel p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium">FAQ-агент для гостей после брони</p>
-                        <p className="mt-1 text-sm text-mute">
-                          Микросервис hotel_faq: TF-IDF RAG по шаблону и загруженным файлам. Гео — Fact Agent.
-                        </p>
-                        <p className="mt-1 text-xs text-mute">Фрагментов в индексе: {faqChunkCount}</p>
-                      </div>
-                      <label className="flex cursor-pointer items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={faqEnabled}
-                          onChange={(event) => setFaqEnabled(event.target.checked)}
-                          className="h-4 w-4 accent-pine"
-                        />
-                        {faqEnabled ? 'Включён' : 'Выключен'}
-                      </label>
-                    </div>
-                  </div>
-
-                  {FAQ_SECTIONS.map((section) => (
-                    <label key={section.id} className="flex flex-col gap-1 rounded-2xl border border-line bg-panel p-4 text-sm">
-                      <span className="font-medium">{section.title}</span>
-                      <textarea
-                        value={faqSections[section.id] || ''}
-                        onChange={(event) =>
-                          setFaqSections((current) => ({ ...current, [section.id]: event.target.value }))
-                        }
-                        rows={section.id === 'other' ? 3 : 2}
-                        placeholder={section.placeholder}
-                        className="resize-none rounded-xl border border-line px-3 py-2 outline-none focus:border-pine"
-                      />
-                      {section.id === 'pets' && !faqSections.pets?.trim() && (
-                        <span className="text-xs text-mute">Пусто — агент эскалирует вопрос вам (как pets.yaml).</span>
-                      )}
-                    </label>
-                  ))}
-
-                  <div className="rounded-2xl border border-line bg-panel p-4">
-                    <p className="font-medium text-sm">Загрузка базы знаний</p>
-                    <p className="mt-1 text-xs text-mute">UTF-8: .txt, .md, .json — попадают в RAG вместе с блоками шаблона.</p>
-                    <label
-                      className={`mt-3 inline-flex cursor-pointer items-center justify-center rounded-xl border border-pine bg-paper px-4 py-2.5 text-sm font-medium text-pine transition-colors hover:bg-moss/10 focus-within:ring-2 focus-within:ring-pine/30 ${busy ? 'pointer-events-none opacity-40' : ''}`}
-                    >
-                      <input
-                        type="file"
-                        accept=".txt,.md,.json,text/plain,text/markdown,application/json"
-                        disabled={busy}
-                        onChange={uploadKbFile}
-                        className="sr-only"
-                      />
-                      Выберите файл
-                    </label>
-                    {faqDocuments.length > 0 && (
-                      <ul className="mt-3 flex flex-col gap-1 text-xs text-mute">
-                        {faqDocuments.map((doc) => (
-                          <li key={doc.id} className="flex items-start justify-between gap-2 rounded-lg bg-paper/80 px-2 py-1">
-                            <span className="min-w-0 flex-1">
-                              {doc.filename} · {doc.chars} симв. · {new Date(doc.uploaded_at).toLocaleString('ru-RU')}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              aria-label={`Удалить ${doc.filename}`}
-                              title="Удалить файл из базы знаний"
-                              onClick={() => removeKbDocument(doc.id, doc.filename)}
-                              className="shrink-0 rounded-md px-1.5 py-0.5 text-base leading-none text-clay hover:bg-clay/10 disabled:opacity-40"
-                            >
-                              ×
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-line bg-panel p-4">
-                    <p className="font-medium text-sm">Проверка ответа (без гостя)</p>
-                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                      <input
-                        value={faqTestQuestion}
-                        onChange={(event) => setFaqTestQuestion(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            testFaqAgent(event)
-                          }
-                        }}
-                        placeholder="Например: во сколько завтрак?"
-                        className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-pine"
-                      />
+              {error && <p className="rounded-2xl border border-clay px-4 py-3 text-clay">{error}</p>}
+              <h1 className="font-serif text-4xl">Регистрация отеля</h1>
+              <p className="text-mute">Сначала отель. После входа откроются чат и база знаний.</p>
+              <form onSubmit={registerHotel} className="flex flex-col gap-2">
+                <input
+                  value={hotelName}
+                  onChange={(event) => setHotelName(event.target.value)}
+                  placeholder="Название отеля"
+                  className="rounded-xl border border-line bg-panel px-3 py-2 outline-none focus:border-pine"
+                />
+                <input
+                  value={hotelAddress}
+                  onChange={(event) => setHotelAddress(event.target.value)}
+                  placeholder="Адрес"
+                  className="rounded-xl border border-line bg-panel px-3 py-2 outline-none focus:border-pine"
+                />
+                <button type="submit" disabled={busy || !hotelName.trim()} className="rounded-xl bg-pine px-4 py-3 text-panel disabled:opacity-40">
+                  Зарегистрировать и войти
+                </button>
+              </form>
+              <h2 className="font-serif text-xl">Войти</h2>
+              {(catalog.registrations || []).length === 0 ? (
+                <p className="text-sm text-mute">Зарегистрированных отелей пока нет.</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {(catalog.registrations || []).map((item) => (
+                    <li key={item.account_id}>
                       <button
                         type="button"
-                        disabled={busy || !faqTestQuestion.trim()}
-                        onClick={testFaqAgent}
-                        className="rounded-xl border border-pine px-3 py-2 text-sm text-pine disabled:opacity-40"
+                        onClick={() => setAccountId(item.account_id)}
+                        className="w-full rounded-2xl border border-line bg-panel px-3 py-2 text-left hover:border-pine"
                       >
-                        Спросить RAG
+                        Войти · {item.name}
                       </button>
-                    </div>
-                    {faqTestResult && (
-                      <div className="mt-3 space-y-1 text-sm">
-                        <p className="text-xs text-mute">
-                          {faqTestResult.mode}
-                          {faqTestResult.method ? ` · ${faqTestResult.method}` : ''}
-                          {faqTestResult.scores?.length ? ` · score ${faqTestResult.scores[0]}` : ''}
-                          {faqTestResult.sources?.length ? ` · ${faqTestResult.sources[0]}` : ''}
-                        </p>
-                        <p className="whitespace-pre-line">{faqTestResult.message}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-4 text-sm text-mute">
-                    <p className="font-medium text-ink">Как видит гость</p>
-                    <ul className="mt-2 list-inside list-disc space-y-1">
-                      <li>Сначала ответ FAQ-агента, если он включён и тема в шаблоне.</li>
-                      <li>Иначе — «передаю отельеру» и сообщение в «Переписке».</li>
-                      <li>Гость может попросить живого человека в кабинете клиента.</li>
-                    </ul>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button type="submit" className="rounded-xl bg-pine px-4 py-3 text-panel">
-                      Сохранить шаблон
-                    </button>
-                    {faqSavedAt && (
-                      <span className="text-xs text-mute">Сохранено: {new Date(faqSavedAt).toLocaleString('ru-RU')}</span>
-                    )}
-                    {faqNotice && <span className="text-sm text-moss">{faqNotice}</span>}
-                  </div>
-                </form>
+                    </li>
+                  ))}
+                </ul>
               )}
             </>
           )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-svh bg-paper text-ink">
+      <div className="mx-auto flex max-w-xl flex-col gap-4 px-5 py-4">
+        {onBack && (
+          <button type="button" onClick={onBack} className="self-start text-sm text-moss underline">
+            На главную
+          </button>
+        )}
+        {error && <p className="rounded-2xl border border-clay px-4 py-3 text-clay">{error}</p>}
+        <header>
+          <p className="text-xs tracking-[0.18em] text-moss uppercase">Отельер</p>
+          <h1 className="font-serif text-4xl">{account.name}</h1>
+          {registeredNote && <p className="mt-1 text-sm">{registeredNote}</p>}
+        </header>
+
+        <section className="rounded-2xl border border-line bg-panel p-4">
+          <h2 className="font-serif text-xl">Чат</h2>
+          <p className="mt-1 text-sm text-mute">Вопросы гостя и ваши ответы. Лишнее можно скрыть только у себя или ещё и у гостя.</p>
+          <div className="mt-4">
+            <Thread messages={hotelierThread} onHide={hideMessage} hideBoth="Удалить у меня и у гостя" />
+          </div>
+          <form onSubmit={sendReply} className="mt-4 flex flex-col gap-2">
+            <textarea
+              value={reply}
+              onChange={(event) => setReply(event.target.value)}
+              rows={3}
+              placeholder="Ответ гостю"
+              className="resize-none rounded-xl border border-line px-3 py-2 outline-none focus:border-pine"
+            />
+            <button type="submit" disabled={busy || !reply.trim()} className="rounded-xl bg-pine px-4 py-3 text-panel disabled:opacity-40">
+              Отправить
+            </button>
+          </form>
         </section>
+
+        <form onSubmit={saveFaqTemplate} className="flex flex-col gap-4">
+          <section className="rounded-2xl border border-line bg-panel p-4">
+            <h2 className="font-serif text-xl">База знаний</h2>
+            <p className="mt-1 text-sm text-mute">
+              Загрузите файл или допишите темы. После сохранения гость получает ответ из этой базы.
+            </p>
+            <p className="mt-1 text-xs text-mute">В индексе {faqChunkCount} фрагментов.</p>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={faqEnabled}
+                onChange={(event) => setFaqEnabled(event.target.checked)}
+                className="h-4 w-4 accent-pine"
+              />
+              {faqEnabled ? 'Ответы из базы включены' : 'Ответы из базы выключены'}
+            </label>
+            <label
+              className={`mt-3 inline-flex cursor-pointer items-center justify-center rounded-xl bg-pine px-4 py-2.5 text-sm text-panel ${busy ? 'pointer-events-none opacity-40' : ''}`}
+            >
+              <input
+                type="file"
+                accept=".txt,.md,.json,text/plain,text/markdown,application/json"
+                disabled={busy}
+                onChange={uploadKbFile}
+                className="sr-only"
+              />
+              Загрузить файл
+            </label>
+            <p className="mt-2 text-xs text-mute">UTF-8: .txt, .md, .json</p>
+            {faqDocuments.length > 0 && (
+              <ul className="mt-3 flex flex-col gap-1 text-xs text-mute">
+                {faqDocuments.map((doc) => (
+                  <li key={doc.id} className="flex items-start justify-between gap-2 rounded-lg bg-paper px-2 py-1">
+                    <span className="min-w-0 flex-1">
+                      {doc.filename} · {doc.chars} симв.
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => removeKbDocument(doc.id, doc.filename)}
+                      className="shrink-0 text-clay disabled:opacity-40"
+                    >
+                      Удалить файл
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {FAQ_SECTIONS.map((section) => (
+            <label key={section.id} className="flex flex-col gap-1 rounded-2xl border border-line bg-panel p-4 text-sm">
+              <span className="font-medium">{section.title}</span>
+              <textarea
+                value={faqSections[section.id] || ''}
+                onChange={(event) =>
+                  setFaqSections((current) => ({ ...current, [section.id]: event.target.value }))
+                }
+                rows={section.id === 'other' ? 3 : 2}
+                placeholder={section.placeholder}
+                className="resize-none rounded-xl border border-line px-3 py-2 outline-none focus:border-pine"
+              />
+            </label>
+          ))}
+
+          <section className="rounded-2xl border border-line bg-panel p-4">
+            <p className="font-medium text-sm">Проверить вопрос</p>
+            <div className="mt-2 flex flex-col gap-2">
+              <input
+                value={faqTestQuestion}
+                onChange={(event) => setFaqTestQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    testFaqAgent(event)
+                  }
+                }}
+                placeholder="Можно с животными?"
+                className="rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-pine"
+              />
+              <button
+                type="button"
+                disabled={busy || !faqTestQuestion.trim()}
+                onClick={testFaqAgent}
+                className="rounded-xl border border-pine px-3 py-2 text-sm text-pine disabled:opacity-40"
+              >
+                Спросить базу
+              </button>
+            </div>
+            {faqTestResult && <p className="mt-3 whitespace-pre-line text-sm">{faqTestResult.message}</p>}
+          </section>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" className="rounded-xl bg-pine px-4 py-3 text-panel">
+              Сохранить базу
+            </button>
+            {faqNotice && <span className="text-sm text-moss">{faqNotice}</span>}
+          </div>
+        </form>
       </div>
     </div>
   )
 }
-
-function Thread({ messages }) {
+function Thread({ messages, onHide, hideBoth = 'Удалить у меня и у отельера' }) {
+  const [menuId, setMenuId] = useState(null)
   if (!messages.length) return <p className="text-sm text-mute">В переписке этого отеля пока пусто.</p>
   return (
     <ul className="flex flex-col gap-2">
-      {messages.map((message) => (
-        <li key={message.id} className="rounded-2xl border border-line bg-panel px-4 py-3">
-          <p className="text-xs tracking-wide text-mute uppercase">
-            {message.author_role === 'hotelier'
-              ? message.author_id === 'hotel-kb'
-                ? 'Отельер · база знаний'
-                : 'Отельер'
-              : message.author_role === 'guest'
-                ? 'Вы'
-                : message.author_role === 'faq_agent'
-                  ? 'Отельер'
-                  : 'Агент'}
-            {message.author_role === 'guest' || message.author_id === 'hotel-kb'
-              ? ''
-              : ` · ${message.author_name}`}
-          </p>
-          <p className="mt-1 text-sm">{message.body}</p>
-        </li>
-      ))}
+      {messages.map((message) => {
+        const question = message.author_role === 'guest'
+        return (
+          <li
+            key={message.id}
+            className={
+              question
+                ? 'rounded-2xl border border-line bg-paper px-4 py-3'
+                : 'rounded-2xl border border-pine bg-panel px-4 py-3'
+            }
+          >
+            <p className="text-xs font-medium tracking-wide text-moss uppercase">{chatCaption(message)}</p>
+            <p className="mt-1 text-sm">{message.body}</p>
+            {onHide &&
+              (menuId === message.id ? (
+                <div className="mt-2 flex flex-col items-start gap-1">
+                  <button type="button" className="text-xs text-moss underline" onClick={() => onHide(message.id, 'me')}>
+                    Удалить у меня
+                  </button>
+                  <button type="button" className="text-xs text-moss underline" onClick={() => onHide(message.id, 'both')}>
+                    {hideBoth}
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="mt-2 text-xs text-mute underline" onClick={() => setMenuId(message.id)}>
+                  Удалить
+                </button>
+              ))}
+          </li>
+        )
+      })}
     </ul>
   )
 }

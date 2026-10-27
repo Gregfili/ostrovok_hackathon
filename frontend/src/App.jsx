@@ -1,6 +1,21 @@
 import { useEffect, useState } from 'react'
 import Admin from './Admin.jsx'
 import HotelCarousel, { CAROUSEL_REGIONS, CarouselShiftIndicator } from './HotelCarousel.jsx'
+
+function accountFromUrl() {
+  const id = new URLSearchParams(window.location.search).get('account') || ''
+  if (id === 'guest' || /^guest-\d+$/.test(id)) return { kind: 'guest', id }
+  if (id.startsWith('hotelier-')) return { kind: 'hotelier', id }
+  return { kind: '', id: '' }
+}
+
+function clearAccountParam() {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('account')) return
+  url.searchParams.delete('account')
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
 const GREETING =
   'Планируете поездку? Опишите, какая она должна быть, и мы подберём вам подходящие варианты.'
 
@@ -243,7 +258,8 @@ function WhoAreYou({ onChoose, onClose }) {
 }
 
 function App() {
-  const [cabinet, setCabinet] = useState(null)
+  const restored = accountFromUrl()
+  const [cabinet, setCabinet] = useState(() => restored.kind || null)
   const [askRole, setAskRole] = useState(false)
   const [guestGate, setGuestGate] = useState(false)
   const [messages, setMessages] = useState([{ role: 'agent', text: GREETING }])
@@ -252,7 +268,8 @@ function App() {
   const [hotels, setHotels] = useState([])
   const [cardSheet, setCardSheet] = useState(null)
   const [hotelNote, setHotelNote] = useState('Здесь будут две стены. Этого в карточке до брони нет.')
-  const [guestId, setGuestId] = useState('')
+  const [guestId, setGuestId] = useState(() => (restored.kind === 'guest' ? restored.id : ''))
+  const [hotelierId] = useState(() => (restored.kind === 'hotelier' ? restored.id : ''))
   const [guestName, setGuestName] = useState('')
   const [picked, setPicked] = useState(null)
   const [chosen, setChosen] = useState(null)
@@ -498,9 +515,14 @@ function App() {
     setAskRole(true)
   }
 
+  function leaveCabinet() {
+    clearAccountParam()
+    setCabinet(null)
+  }
+
   function continueFromCabinet(payload) {
     if (!payload) return
-    setCabinet(null)
+    leaveCabinet()
     setGuestId((current) => current || payload.guest_id || '')
     if (payload.hotel_id) {
       setPicked(payload.hotel_id)
@@ -535,7 +557,7 @@ function App() {
     return (
       <Admin
         entry="guest"
-        onBack={() => setCabinet(null)}
+        onBack={leaveCabinet}
         preferredHotelId={picked || ''}
         initialAccountId={guestId || ''}
         initialStayDates={stayDates}
@@ -545,7 +567,9 @@ function App() {
       />
     )
   }
-  if (cabinet === 'hotelier') return <Admin entry="hotelier" onBack={() => setCabinet(null)} />
+  if (cabinet === 'hotelier') {
+    return <Admin entry="hotelier" onBack={leaveCabinet} initialAccountId={hotelierId} />
+  }
 
   const focus = chosen ? hotels.find((hotel) => hotel.id === chosen) : null
   const shown = focus ? [focus] : hotels

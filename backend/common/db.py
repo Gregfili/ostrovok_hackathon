@@ -1,97 +1,53 @@
-"""SQLite для фактов отельера. Строка OSM отсюда не удаляется."""
+"""Запросы к SQLite. Схема живёт в common.tables и миграциях Alembic.
+
+Новый код берёт Session через common.database.get_db. Строка OSM отсюда не удаляется.
+"""
 
 from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 
+from common.database import DB_PATH, apply_migrations
 from common.models import Fact
 from common.snapshots import DATA
 
-DB_PATH = DATA / "app.db"
+_ready = False
+_lock = threading.Lock()
 
 
 def connect() -> sqlite3.Connection:
     DATA.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db() -> None:
-    with connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS facts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                hotel_id TEXT NOT NULL,
-                feature TEXT NOT NULL,
-                method TEXT NOT NULL,
-                payload TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS accounts (
-                id TEXT PRIMARY KEY,
-                role TEXT NOT NULL,
-                name TEXT NOT NULL,
-                hotel_id TEXT
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                hotel_id TEXT NOT NULL,
-                guest_id TEXT,
-                author_role TEXT NOT NULL,
-                author_id TEXT NOT NULL,
-                body TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS hotel_registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL,
-                address TEXT,
-                hotel_id TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS bookings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guest_id TEXT NOT NULL,
-                hotel_id TEXT NOT NULL,
-                check_in TEXT NOT NULL,
-                check_out TEXT NOT NULL,
-                nights INTEGER NOT NULL,
-                amount_rub INTEGER NOT NULL,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        _seed_accounts(conn)
-        count = conn.execute("SELECT COUNT(*) AS n FROM facts").fetchone()["n"]
-        if count:
+    """Схема и стартовые счета готовятся один раз на процесс.
+
+    Повторный вызов на каждом открытии кабинета снова писал в SQLite и при двух
+    одновременных запросах страницы отвечал 500.
+    """
+    global _ready
+    if _ready:
+        return
+    with _lock:
+        if _ready:
             return
-        snapshot = DATA / "facts.json"
-        if not snapshot.exists():
-            return
-        raw = json.loads(snapshot.read_text(encoding="utf-8"))
-        for item in raw.get("items", []):
-            fact = Fact.model_validate(item)
-            _insert(conn, fact)
+        apply_migrations()
+        with connect() as conn:
+            _seed_accounts(conn)
+            count = conn.execute("SELECT COUNT(*) AS n FROM facts").fetchone()["n"]
+            if not count:
+                snapshot = DATA / "facts.json"
+                if snapshot.exists():
+                    raw = json.loads(snapshot.read_text(encoding="utf-8"))
+                    for item in raw.get("items", []):
+                        fact = Fact.model_validate(item)
+                        _insert(conn, fact)
+        _ready = True
 
 
 def _seed_accounts(conn: sqlite3.Connection) -> None:
@@ -100,7 +56,7 @@ def _seed_accounts(conn: sqlite3.Connection) -> None:
     guests = conn.execute("SELECT COUNT(*) AS n FROM accounts WHERE role = 'guest'").fetchone()["n"]
     if not guests:
         conn.execute(
-            "INSERT INTO accounts (id, role, name, hotel_id) VALUES ('guest', 'guest', 'Гость', NULL)"
+            "INSERT INTO accounts (id, role, name, hotel_id) VALUES ('ostrovok-admin', 'guest', 'Админ Островка', NULL)"
         )
     for hotel in list_hotels():
         account_id = f"hotelier-{hotel['id']}"

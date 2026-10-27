@@ -2,6 +2,8 @@
 
 Агенты подключены как модули этого процесса. У каждого есть свой main.py,
 его можно поднять отдельно, когда появится Compose.
+При старте схема SQLite применяется миграциями Alembic. Новая ручка берёт
+сессию через common.database.get_db.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from admin.service import (  # noqa: E402
     ask,
     create_guest,
     desk,
+    hide_message,
     list_accounts,
     pay,
     post_booking_ask,
@@ -123,6 +126,12 @@ class PayRequest(BaseModel):
     check_out: str
 
 
+class HideMessageRequest(BaseModel):
+    account_id: str
+    message_id: int
+    scope: str
+
+
 class FaqConfigRequest(BaseModel):
     enabled: bool | None = None
     sections: dict[str, str] | None = None
@@ -221,6 +230,11 @@ def admin_post_booking_ask(body: PostBookingAskRequest) -> dict:
 @app.post("/api/admin/reply")
 def admin_reply(body: ReplyRequest) -> dict:
     return _admin_call(send_reply, body.account_id, body.text)
+
+
+@app.post("/api/admin/messages/hide")
+def admin_hide_message(body: HideMessageRequest) -> dict:
+    return _admin_call(hide_message, body.account_id, body.message_id, body.scope)
 
 
 @app.post("/api/admin/pay")
