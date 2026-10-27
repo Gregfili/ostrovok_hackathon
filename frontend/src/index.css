@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+  --font-serif: Palatino, "Palatino Linotype", Georgia, serif;
+  --color-ink: #1c1915;
+  --color-mute: #6f685f;
+  --color-paper: #f3efe7;
+  --color-panel: #fffcf7;
+  --color-line: #e2dbd0;
+  --color-pine: #1f4d3a;
+  --color-moss: #2f6b4f;
+  --color-clay: #8d3b32;
+}

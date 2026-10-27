@@ -1,0 +1,6 @@
+id: facade_noise
+tools: [facade_noise]
+min_confidence: 0.6
+if_below: ask_hotelier
+ttl_days: 30
+question: "Какая сторона тише ночью, улица или двор?"

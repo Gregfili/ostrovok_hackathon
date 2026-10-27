@@ -1,0 +1,44 @@
+{
+  "area": "Патриаршие и Большая Садовая",
+  "anchor": "Большая Садовая, 10",
+  "source": "открытые карточки магазинов, не Overpass",
+  "as_of": "2026-10-25",
+  "purpose": "рекомендация покупок, не характеристика шума отеля",
+  "items": [
+    {
+      "name": "Мастер и маргаритка",
+      "kind": "цветы и подарки",
+      "address": "Тверской бульвар, 19с1",
+      "why": "подарки и цветы для близких",
+      "source": "https://2gis.ru/moscow/firm/70000001039137591"
+    },
+    {
+      "name": "PETRA",
+      "kind": "украшения",
+      "address": "Малая Бронная, 21/13с1",
+      "why": "вещь в подарок, шоурум у Патриарших",
+      "source": "https://mydearpetra.ru/showrooms/"
+    },
+    {
+      "name": "Kooperativ.shop",
+      "kind": "шоурум",
+      "address": "Малая Бронная, 24с3",
+      "why": "дневные покупки в том же квартале",
+      "source": "https://moskva.nashigoroda.ru/adresa/216219/"
+    },
+    {
+      "name": "The Lemme",
+      "kind": "одежда",
+      "address": "Большая Бронная, 23",
+      "why": "одежда рядом с прудами",
+      "source": "https://moskva.nashigoroda.ru/adresa/216219/"
+    },
+    {
+      "name": "Persone Amusant",
+      "kind": "одежда",
+      "address": "Малая Бронная, 2с1",
+      "why": "корнер у начала Малой Бронной",
+      "source": "https://personeamusant.ru/shops"
+    }
+  ]
+}

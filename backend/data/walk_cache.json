@@ -1,0 +1,42 @@
+{
+  "as_of": "2026-10-26",
+  "source": "https://www.openstreetmap.org/copyright",
+  "anchor_osm": "relation/7164364",
+  "speed_m_per_min": 83.333,
+  "items": [
+    {
+      "distance_m": 218,
+      "minutes": 3,
+      "hotel_id": "pekin",
+      "anchor_id": "bad_apartment",
+      "crosses_trunk": false,
+      "crossing_names": [],
+      "confidence": 0.75,
+      "detail": "Длина пеших линий OSM до Садовой, 10, скорость 5 км/ч. Это не замер шагомером и не время с багажом."
+    },
+    {
+      "distance_m": 653,
+      "minutes": 8,
+      "hotel_id": "marriott-tverskaya",
+      "anchor_id": "bad_apartment",
+      "crosses_trunk": true,
+      "crossing_names": [
+        "Тверская улица"
+      ],
+      "confidence": 0.75,
+      "detail": "Длина пеших линий OSM до Садовой, 10, скорость 5 км/ч. Это не замер шагомером и не время с багажом."
+    },
+    {
+      "distance_m": 2015,
+      "minutes": 24,
+      "hotel_id": "lotte",
+      "anchor_id": "bad_apartment",
+      "crosses_trunk": true,
+      "crossing_names": [
+        "улица Новый Арбат"
+      ],
+      "confidence": 0.75,
+      "detail": "Длина пеших линий OSM до Садовой, 10, скорость 5 км/ч. Это не замер шагомером и не время с багажом."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "as_of": "2026-10-26",
+  "source": "https://www.wikidata.org/wiki/Q4146884",
+  "items": [
+    {
+      "id": "bad_apartment",
+      "place": "нехорошая квартира",
+      "phrases": [
+        "нехорош",
+        "булгак",
+        "bad apartment",
+        "bulgakov"
+      ],
+      "address": "Большая Садовая, 10",
+      "wikidata": "Q4146884",
+      "note": "Координаты — «Булгаковский дом», OSM relation/7164364, Wikidata Q4098878. В каталоге якорь по-прежнему квартира Wikidata Q4146884.",
+      "lat": 55.767082,
+      "lon": 37.5931706,
+      "osm": "relation/7164364"
+    }
+  ]
+}

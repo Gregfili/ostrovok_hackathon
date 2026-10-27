@@ -1,0 +1,6 @@
+id: metro_exit
+tools: [metro_exits]
+min_confidence: 0.6
+if_below: ask_hotelier
+ttl_days: 1
+question: "Какой выход метро сейчас открыт?"

@@ -1,0 +1,6 @@
+id: pets
+tools: []
+min_confidence: 0.6
+if_below: ask_hotelier
+ttl_days: 90
+question: "Кого и до какого веса пускаете?"

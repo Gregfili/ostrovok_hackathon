@@ -1,0 +1,6 @@
+id: walk_to
+tools: [walk_to]
+min_confidence: 0.6
+if_below: ask_hotelier
+ttl_days: 7
+question: "Сколько минут пешком от {anchor} до входа?"

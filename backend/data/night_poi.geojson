@@ -1,0 +1,209 @@
+{
+  "as_of": "2026-10-26",
+  "source": "https://www.openstreetmap.org/copyright",
+  "items": [
+    {
+      "id": "node/2444894919",
+      "name": "Эгоист",
+      "amenity": "stripclub",
+      "lon": 37.5936842,
+      "lat": 55.7688808
+    },
+    {
+      "id": "node/10722898468",
+      "name": "Микс Afterparty",
+      "amenity": "nightclub",
+      "lon": 37.5946516,
+      "lat": 55.7698172
+    },
+    {
+      "id": "node/2441527290",
+      "name": "Noor Electro",
+      "amenity": "bar",
+      "lon": 37.6007608,
+      "lat": 55.7669616
+    },
+    {
+      "id": "node/2737112897",
+      "name": "IVAN",
+      "amenity": "bar",
+      "lon": 37.5983129,
+      "lat": 55.7677554
+    },
+    {
+      "id": "node/2968621821",
+      "name": "We Cidreria",
+      "amenity": "bar",
+      "lon": 37.5986916,
+      "lat": 55.7679619
+    },
+    {
+      "id": "node/3312002399",
+      "name": "Lights",
+      "amenity": "nightclub",
+      "lon": 37.5977018,
+      "lat": 55.7674032
+    },
+    {
+      "id": "node/3336224898",
+      "name": "Пивбар",
+      "amenity": "bar",
+      "lon": 37.5971951,
+      "lat": 55.7699838
+    },
+    {
+      "id": "node/4775040929",
+      "name": "Berlin",
+      "amenity": "bar",
+      "lon": 37.5971366,
+      "lat": 55.7668704
+    },
+    {
+      "id": "node/5434230654",
+      "name": "Наше кафе",
+      "amenity": "bar",
+      "lon": 37.6000256,
+      "lat": 55.7669844
+    },
+    {
+      "id": "node/5730559771",
+      "name": "Borrachitos",
+      "amenity": "pub",
+      "lon": 37.6024823,
+      "lat": 55.7676619
+    },
+    {
+      "id": "node/5856251085",
+      "name": "yosya",
+      "amenity": "bar",
+      "lon": 37.5970066,
+      "lat": 55.7668229
+    },
+    {
+      "id": "node/6297927363",
+      "name": "Dry & Wet",
+      "amenity": "bar",
+      "lon": 37.5976463,
+      "lat": 55.7680746
+    },
+    {
+      "id": "node/7756869046",
+      "name": "Шесть-you-Шесть",
+      "amenity": "bar",
+      "lon": 37.5974021,
+      "lat": 55.7700864
+    },
+    {
+      "id": "node/7925452991",
+      "name": "Териберка",
+      "amenity": "bar",
+      "lon": 37.5973378,
+      "lat": 55.7700545
+    },
+    {
+      "id": "node/7925452992",
+      "name": "Valdo",
+      "amenity": "bar",
+      "lon": 37.5972741,
+      "lat": 55.7700229
+    },
+    {
+      "id": "node/9394367241",
+      "name": "Руки вверх",
+      "amenity": "bar",
+      "lon": 37.6010634,
+      "lat": 55.7677139
+    },
+    {
+      "id": "node/11425792249",
+      "name": "Segreto",
+      "amenity": "bar",
+      "lon": 37.5984912,
+      "lat": 55.7675494
+    },
+    {
+      "id": "node/1666841208",
+      "name": "Джон Булл",
+      "amenity": "pub",
+      "lon": 37.5833995,
+      "lat": 55.7483155
+    },
+    {
+      "id": "node/4114628805",
+      "name": "Проточный",
+      "amenity": "bar",
+      "lon": 37.5822543,
+      "lat": 55.7504305
+    },
+    {
+      "id": "node/5433346442",
+      "name": "Royal Space",
+      "amenity": "bar",
+      "lon": 37.5841776,
+      "lat": 55.7519399
+    },
+    {
+      "id": "node/5967492879",
+      "name": "Кино, вино и домино",
+      "amenity": "bar",
+      "lon": 37.5871655,
+      "lat": 55.7528728
+    },
+    {
+      "id": "node/13228042086",
+      "name": "Царская рюмочная",
+      "amenity": "bar",
+      "lon": 37.5839952,
+      "lat": 55.7528909
+    },
+    {
+      "id": "node/13564537938",
+      "name": "Club1",
+      "amenity": "nightclub",
+      "lon": 37.5871552,
+      "lat": 55.751955
+    },
+    {
+      "id": "node/13564537939",
+      "name": "Twenty One Club",
+      "amenity": "bar",
+      "lon": 37.5876355,
+      "lat": 55.7519586
+    },
+    {
+      "id": "node/13564537940",
+      "name": "Olimpbet Lounge",
+      "amenity": "bar",
+      "lon": 37.5865923,
+      "lat": 55.7521391
+    },
+    {
+      "id": "node/13564537941",
+      "name": "Penthouse",
+      "amenity": "stripclub",
+      "lon": 37.5856168,
+      "lat": 55.7521423
+    },
+    {
+      "id": "node/13564537944",
+      "name": "Men's X Club",
+      "amenity": "stripclub",
+      "lon": 37.5841905,
+      "lat": 55.7520078
+    },
+    {
+      "id": "node/6915246585",
+      "name": "Harat’s",
+      "amenity": "pub",
+      "lon": 37.5868604,
+      "lat": 55.7531005
+    },
+    {
+      "id": "node/10557552962",
+      "name": "Чисто ростовский бар",
+      "amenity": "bar",
+      "lon": 37.5906484,
+      "lat": 55.7654173
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "as_of": "2026-10-26",
+  "source": "https://www.openstreetmap.org/copyright",
+  "repairs": "not_collected",
+  "items": [
+    {
+      "hotel_id": "pekin",
+      "station": "Маяковская",
+      "entrance": "4",
+      "distance_m": 200,
+      "osm": "node/1108417037"
+    },
+    {
+      "hotel_id": "marriott-tverskaya",
+      "station": "Маяковская",
+      "entrance": "3",
+      "distance_m": 172,
+      "osm": "node/5312004266"
+    },
+    {
+      "hotel_id": "lotte",
+      "station": "Смоленская",
+      "entrance": "1",
+      "distance_m": 262,
+      "osm": "node/238154965"
+    }
+  ]
+}

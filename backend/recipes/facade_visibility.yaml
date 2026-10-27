@@ -1,0 +1,6 @@
+id: facade_visibility
+tools: [building_raycast]
+min_confidence: 0.6
+if_below: ask_hotelier
+ttl_days: 90
+question: "Какие категории номеров смотрят на {side}?"

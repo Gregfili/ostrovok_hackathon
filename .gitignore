@@ -1,0 +1,10 @@
+backend/data/*.db
+backend/data/_*.osm
+backend/data/_*.json
+backend/data/_*.overpassql
+
+__pycache__/
+*.py[cod]
+node_modules/
+.env
+.env.*

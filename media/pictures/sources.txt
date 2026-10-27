@@ -1,0 +1,20 @@
+Фото гостиниц взяты из Wikimedia Commons, не с ostrovok.ru.
+
+pekin.jpg
+  Пекин, Большая Садовая улица, 5
+  Vladimir OKC, CC BY-SA 3.0
+  https://commons.wikimedia.org/wiki/File:Hotel_Peking_Moscow_(2).jpg
+
+marriott-tverskaya.jpg
+  Marriott Grand, Тверская улица, 25
+  Sergey A. Demidov, CC BY 4.0
+  https://commons.wikimedia.org/wiki/File:20180518_Tverskoy_district_04.jpg
+
+lotte.jpg
+  Lotte Hotel Moscow, пересечение Нового Арбата и Новинского бульвара
+  Lotte Hotel Moscow, CC BY-SA 3.0
+  https://commons.wikimedia.org/wiki/File:Lotte_Hotel_Moscow.jpg
+
+hotel-fact-agent-architecture.jpg
+hotel-fact-agent-scaling.jpg
+  схемы проекта, перенесены из doc/

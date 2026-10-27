@@ -1,0 +1,1 @@
+﻿"""Агент Hotel Fact Agent."""
