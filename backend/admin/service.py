@@ -201,7 +201,7 @@ def _messages(hotel_id: str, viewer: str = "") -> list[dict]:
             "guest_id": message.guest_id,
             "author_role": message.author_role,
             "author_id": message.author_id,
-            "author_name": author_name or "Hotel Fact Agent",
+            "author_name": author_name or "Свой островок",
             "body": message.body,
             "created_at": message.created_at,
         }

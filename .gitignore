@@ -7,7 +7,12 @@ backend/data/faq_vectors/*.meta.json
 
 __pycache__/
 *.py[cod]
+.Python
 .venv/
 node_modules/
 .env
 .env.*
+.vscode/
+.idea/
+*.log
+.DS_Store

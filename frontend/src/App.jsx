@@ -17,10 +17,10 @@ function clearAccountParam() {
 }
 
 const GREETING =
-  'Планируете поездку? Опишите, какая она должна быть, и мы подберём вам подходящие варианты.'
+  'Планируете поездку? Опишите, какая она должна быть, и мы подберём вам подходящие варианты'
 
 const QUERY_SAMPLE =
-  'Например: мне нужен тихий отель, люблю походить по булгаковским местам, а также шопинг, и вечером развлечься в ночном клубе.'
+  'Например: мне нужен тихий отель, люблю походить по булгаковским местам, а также шопинг, и вечером развлечься в ночном клубе'
 
 const NIGHT_KIND = {
   nightclub: 'ночной клуб',
@@ -701,7 +701,7 @@ function App() {
                 Здравствуйте, <span className="font-medium text-ink">{guestName}</span>
               </p>
             ) : (
-              <p className="mt-2 text-sm text-mute">Подберём отель под ваш запрос</p>
+              <p className="mt-2 text-sm text-mute">Найдём отель под ваш запрос</p>
             )}
           </header>
           <div className="mx-auto flex w-full max-w-[36rem] flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4">
@@ -716,16 +716,18 @@ function App() {
                       : 'max-w-[36rem] self-start rounded-2xl bg-panel px-4 py-3 whitespace-pre-line shadow-sm'
                 }
               >
-                <span className="mb-1 block text-xs tracking-wide uppercase opacity-70">
-                  {message.role === 'user'
-                    ? 'Вы'
-                    : message.role === 'hotelier'
-                      ? 'Отельер'
-                      : message.role === 'faq_agent'
+                {!(index === 0 && message.role === 'agent') && (
+                  <span className="mb-1 block text-xs tracking-wide uppercase opacity-70">
+                    {message.role === 'user'
+                      ? 'Вы'
+                      : message.role === 'hotelier'
                         ? 'Отельер'
-                        : 'Агент'}
-                  {message.ask ? ' · вопрос' : ''}
-                </span>
+                        : message.role === 'faq_agent'
+                          ? 'Отельер'
+                          : 'Агент'}
+                    {message.ask ? ' · вопрос' : ''}
+                  </span>
+                )}
                 {message.text}
                 {message.hotelierChat && (
                   <button

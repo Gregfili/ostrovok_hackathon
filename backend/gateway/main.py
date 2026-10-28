@@ -1,4 +1,4 @@
-"""Hotel Fact Agent: публичный шлюз на порту 8080.
+"""«Свой островок»: публичный шлюз на порту 8080.
 
 Агенты подключены как модули этого процесса. У каждого есть свой main.py,
 его можно поднять отдельно, когда появится Compose.
@@ -74,7 +74,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Hotel Fact Agent", lifespan=lifespan)
+app = FastAPI(title="Свой островок", lifespan=lifespan)
 
 
 class SearchRequest(BaseModel):
