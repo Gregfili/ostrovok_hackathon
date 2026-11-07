@@ -620,6 +620,9 @@ def _one_facts(hotel: dict, query: str) -> str:
     sun = _sunnier(hotel)
     if sun:
         bits.append(sun)
+    floor_view = ((_fact(hotel, "facade_visibility") or {}).get("data") or {}).get("floor_view")
+    if floor_view:
+        bits.append(str(floor_view))
     return " ".join(bits)
 
 

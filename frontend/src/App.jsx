@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Admin from './Admin.jsx'
+import CathedralView from './CathedralView.jsx'
 import HotelCarousel, { CAROUSEL_REGIONS, CarouselShiftIndicator } from './HotelCarousel.jsx'
 
 function accountFromUrl() {
@@ -94,6 +95,14 @@ function HotelDossier({ hotel, picked, onPick, onChoose }) {
       }`}
     >
       <HotelPhoto hotel={hotel} large={picked} />
+      {view?.data?.view_scene && (
+        <CathedralView
+          scene={view.data.view_scene}
+          sentence={view.data.floor_view}
+          check={view.data.view_check}
+          passport={view.data.floor_passport}
+        />
+      )}
       <p className="font-medium">{hotel.name || hotel.id}</p>
       <p className="text-sm text-mute">{hotel.address}</p>
       {sides.length === 0 ? (
@@ -110,6 +119,12 @@ function HotelDossier({ hotel, picked, onPick, onChoose }) {
                 </p>
                 <p>{nightLine(side)}</p>
                 {sunHours[side.title] && <p>{sunHours[side.title]}</p>}
+                {view?.data?.floor_view && view.data.floor_view_side === side.title && (
+                  <p>{view.data.floor_view}</p>
+                )}
+                {view?.data?.floor_passport && view.data.floor_view_side === side.title && (
+                  <p className="text-mute">{view.data.floor_passport}</p>
+                )}
                 {shot?.verdict === 'open' && <p>Есть проём.</p>}
               </li>
             )

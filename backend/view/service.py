@@ -6,6 +6,8 @@ import math
 
 from common.models import Fact, unknown
 from common.snapshots import load_json
+from view.floor_view import describe as floor_view
+from view.view_check import load_sentence as view_check_sentence
 from view.raycast import raycast, to_xy
 from view.sun import wall_sun_label
 
@@ -124,7 +126,56 @@ def for_hotel(ctx: dict) -> Fact:
         data={"shots": [{"title": title, **hit} for title, hit in shots]},
     )
     _attach_sun(fact, props, ctx.get("dates") or "")
+    _attach_floor(fact, hotel_id, props, buildings)
     return fact
+
+
+_MONTHS = (
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+)
+
+
+def _guest_day(iso: str | None) -> str | None:
+    if not iso or len(iso) < 10:
+        return None
+    _year, month, day = iso[:10].split("-")
+    return f"{int(day)} {_MONTHS[int(month) - 1]}"
+
+
+def _floor_passport(view: dict) -> str:
+    map_day = _guest_day(view.get("map_as_of"))
+    relief_day = _guest_day(view.get("terrain_as_of"))
+    if map_day and relief_day:
+        return f"Карта {map_day}, рельеф {relief_day}."
+    if map_day or relief_day:
+        return f"Карта и рельеф, {map_day or relief_day}."
+    return "Карта и рельеф."
+
+
+def _attach_floor(fact: Fact, hotel_id: str | None, props: dict, buildings: list) -> None:
+    view = floor_view(str(hotel_id or ""), props, buildings)
+    if not view:
+        return
+    fact.data["floor_view"] = view["sentence"]
+    fact.data["floor_view_floor"] = view["floor"]
+    fact.data["floor_view_side"] = view["side_title"]
+    fact.data["view_scene"] = view["scene"]
+    if check := view_check_sentence():
+        fact.data["view_check"] = check
+    fact.data["floor_passport"] = _floor_passport(view)
+    if view["terrain_source"] and view["terrain_source"] not in fact.sources:
+        fact.sources.append(view["terrain_source"])
 
 
 def _attach_sun(fact: Fact, props: dict, dates: str) -> None:

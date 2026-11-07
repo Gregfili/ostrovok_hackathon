@@ -1,0 +1,88 @@
+{
+  "source": "SRTM 30 m via OpenTopoData",
+  "source_url": "https://api.opentopodata.org/v1/srtm30m",
+  "as_of": "2026-11-04",
+  "hotel_id": "pekin",
+  "points": [
+    {
+      "lat": 55.744,
+      "lon": 37.58,
+      "elevation_m": 146.0
+    },
+    {
+      "lat": 55.744,
+      "lon": 37.59,
+      "elevation_m": 146.0
+    },
+    {
+      "lat": 55.744,
+      "lon": 37.6,
+      "elevation_m": 135.0
+    },
+    {
+      "lat": 55.744,
+      "lon": 37.61,
+      "elevation_m": 120.0
+    },
+    {
+      "lat": 55.753,
+      "lon": 37.58,
+      "elevation_m": 149.0
+    },
+    {
+      "lat": 55.753,
+      "lon": 37.59,
+      "elevation_m": 149.0
+    },
+    {
+      "lat": 55.753,
+      "lon": 37.6,
+      "elevation_m": 148.0
+    },
+    {
+      "lat": 55.753,
+      "lon": 37.61,
+      "elevation_m": 152.0
+    },
+    {
+      "lat": 55.762,
+      "lon": 37.58,
+      "elevation_m": 145.0
+    },
+    {
+      "lat": 55.762,
+      "lon": 37.59,
+      "elevation_m": 159.0
+    },
+    {
+      "lat": 55.762,
+      "lon": 37.6,
+      "elevation_m": 156.0
+    },
+    {
+      "lat": 55.762,
+      "lon": 37.61,
+      "elevation_m": 159.0
+    },
+    {
+      "lat": 55.771,
+      "lon": 37.58,
+      "elevation_m": 152.0
+    },
+    {
+      "lat": 55.771,
+      "lon": 37.59,
+      "elevation_m": 158.0
+    },
+    {
+      "lat": 55.771,
+      "lon": 37.6,
+      "elevation_m": 165.0
+    },
+    {
+      "lat": 55.771,
+      "lon": 37.61,
+      "elevation_m": 153.0
+    }
+  ]
+}

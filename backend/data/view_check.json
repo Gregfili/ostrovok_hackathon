@@ -1,0 +1,454 @@
+{
+  "as_of": "2026-11-07",
+  "clear_m": 2.0,
+  "checked": 43,
+  "ray_matched": 41,
+  "ray_lost_to_simple": 2,
+  "losses": [
+    {
+      "hotel": "Пекин",
+      "floor": 6,
+      "distance_m": 237.0,
+      "margin_m": 0.8
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 321.3,
+      "margin_m": 1.5
+    }
+  ],
+  "cases": [
+    {
+      "hotel": "Пекин",
+      "floor": 1,
+      "distance_m": 237.0,
+      "house_m": 21.0,
+      "margin_m": -12.9,
+      "manual_blocked": true,
+      "ray_blocked": true,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 5,
+      "distance_m": 237.0,
+      "house_m": 21.0,
+      "margin_m": -1.9,
+      "manual_blocked": true,
+      "ray_blocked": true,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 6,
+      "distance_m": 237.0,
+      "house_m": 21.0,
+      "margin_m": 0.8,
+      "manual_blocked": true,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 1,
+      "distance_m": 265.0,
+      "house_m": 6.0,
+      "margin_m": 3.0,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 5,
+      "distance_m": 265.0,
+      "house_m": 6.0,
+      "margin_m": 13.8,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": false
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 6,
+      "distance_m": 265.0,
+      "house_m": 6.0,
+      "margin_m": 16.5,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": false
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 1,
+      "distance_m": 285.7,
+      "house_m": 18.0,
+      "margin_m": -8.4,
+      "manual_blocked": true,
+      "ray_blocked": true,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 5,
+      "distance_m": 285.7,
+      "house_m": 18.0,
+      "margin_m": 2.4,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 6,
+      "distance_m": 285.7,
+      "house_m": 18.0,
+      "margin_m": 5.0,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 1,
+      "distance_m": 2509.6,
+      "house_m": 15.0,
+      "margin_m": 77.2,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 1,
+      "distance_m": 2443.6,
+      "house_m": 6.0,
+      "margin_m": 83.0,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Пекин",
+      "floor": 1,
+      "distance_m": 2011.1,
+      "house_m": 18.0,
+      "margin_m": 46.9,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 126.4,
+      "house_m": 3.0,
+      "margin_m": 3.4,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 2,
+      "distance_m": 126.4,
+      "house_m": 3.0,
+      "margin_m": 6.3,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": false
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2155.6,
+      "house_m": 6.0,
+      "margin_m": 70.9,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2205.0,
+      "house_m": 15.0,
+      "margin_m": 64.6,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2414.3,
+      "house_m": 9.0,
+      "margin_m": 82.1,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2319.0,
+      "house_m": 3.0,
+      "margin_m": 83.0,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2312.9,
+      "house_m": 3.0,
+      "margin_m": 82.7,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2011.9,
+      "house_m": 18.0,
+      "margin_m": 51.6,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Safmar Grand Moscow",
+      "floor": 1,
+      "distance_m": 2180.8,
+      "house_m": 6.0,
+      "margin_m": 72.3,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 369.3,
+      "house_m": 12.0,
+      "margin_m": 10.3,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 369.3,
+      "house_m": 12.0,
+      "margin_m": 12.5,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 291.4,
+      "house_m": 15.0,
+      "margin_m": 2.8,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 291.4,
+      "house_m": 15.0,
+      "margin_m": 5.2,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 321.3,
+      "house_m": 18.0,
+      "margin_m": 1.5,
+      "manual_blocked": true,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 321.3,
+      "house_m": 18.0,
+      "margin_m": 3.9,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 189.7,
+      "house_m": 6.0,
+      "margin_m": 6.1,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 189.7,
+      "house_m": 6.0,
+      "margin_m": 8.7,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 505.6,
+      "house_m": 12.0,
+      "margin_m": 20.3,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 505.6,
+      "house_m": 12.0,
+      "margin_m": 22.3,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 623.9,
+      "house_m": 9.0,
+      "margin_m": 30.9,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 623.9,
+      "house_m": 9.0,
+      "margin_m": 32.6,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 482.3,
+      "house_m": 3.0,
+      "margin_m": 27.8,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 482.3,
+      "house_m": 3.0,
+      "margin_m": 29.9,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": false
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 1212.4,
+      "house_m": 6.0,
+      "margin_m": 76.7,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 1196.0,
+      "house_m": 9.0,
+      "margin_m": 72.7,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 1154.3,
+      "house_m": 3.0,
+      "margin_m": 76.0,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 658.4,
+      "house_m": 6.0,
+      "margin_m": 36.2,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 2,
+      "distance_m": 658.4,
+      "house_m": 6.0,
+      "margin_m": 37.8,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 935.1,
+      "house_m": 15.0,
+      "margin_m": 49.5,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 974.3,
+      "house_m": 15.0,
+      "margin_m": 52.2,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    },
+    {
+      "hotel": "Lotte Hotel Moscow",
+      "floor": 1,
+      "distance_m": 871.7,
+      "house_m": 15.0,
+      "margin_m": 42.0,
+      "manual_blocked": false,
+      "ray_blocked": false,
+      "simple_blocked": true
+    }
+  ],
+  "sentence": "Проверка по 43 домам на разрезе: луч совпал с разметкой в 41. В двух случаях запас над крышей меньше 2 м, и там точнее правило «чем выше, тем виднее»: 6-й этаж Пекина и 1-й этаж Lotte."
+}

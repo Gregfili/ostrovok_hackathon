@@ -16,6 +16,12 @@
         "osm": "relation/2142863",
         "osm_levels": 7,
         "eye_height_m": 2,
+        "view_landmark": {
+          "name": "Храм Христа Спасителя",
+          "point": [37.605556, 55.744444],
+          "height_m": 103,
+          "side_id": "street"
+        },
         "sides": [
           {
             "id": "street",
@@ -169,6 +175,12 @@
         "osm": "relation/1421095",
         "osm_levels": 9,
         "eye_height_m": 2,
+        "view_landmark": {
+          "name": "Храм Христа Спасителя",
+          "point": [37.605556, 55.744444],
+          "height_m": 103,
+          "side_id": "street"
+        },
         "sides": [
           {
             "id": "street",
@@ -371,6 +383,12 @@
         "osm": "way/37447149",
         "osm_levels": 21,
         "eye_height_m": 2,
+        "view_landmark": {
+          "name": "Храм Христа Спасителя",
+          "point": [37.605556, 55.744444],
+          "height_m": 103,
+          "side_id": "opposite"
+        },
         "sides": [
           {
             "id": "street",
